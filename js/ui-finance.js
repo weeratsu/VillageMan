@@ -301,7 +301,55 @@ async function addExpense(){
 async function delExpense(id){ await window.CM_REPO.remove('expenses', id); F.toast('Expense deleted'); renderExpenses(); }
 
 /* ============================ REPORTS ============================ */
-async function renderReports(){
+async let _utilRptYear = new Date().getFullYear();
+let _utilRptType = 'electricity';
+function setUtilRptYear(y){ _utilRptYear=parseInt(y,10)||new Date().getFullYear(); renderReports(); }
+function setUtilRptType(t){ _utilRptType=t; renderReports(); }
+/* Build a 12-month usage report for one utility type + year. Returns HTML. */
+function _utilYearReport(bills, type, year){
+  var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var isElec = (type==='electricity');
+  var months=[]; for(var i=0;i<12;i++){ months.push({units:0,amount:0,cUnits:0,cAmount:0,hUnits:0,hAmount:0,split:false,n:0}); }
+  (bills||[]).forEach(function(b){
+    if((b.utility_type||'')!==type) return;
+    var per=(b.period||''); var pp=per.split('-'); if(pp.length<2) return;
+    if(parseInt(pp[0],10)!==year) return;
+    var mi=parseInt(pp[1],10)-1; if(mi<0||mi>11) return;
+    var M=months[mi]; M.n++;
+    if(b.split_meter){
+      M.split=true;
+      M.cUnits+=(Number(b.central_units)||0); M.cAmount+=(Number(b.central_amount)||0);
+      M.hUnits+=(Number(b.home_units)||0); M.hAmount+=(Number(b.home_amount)||0);
+      M.units+=(Number(b.central_units)||0); M.amount+=(Number(b.central_amount)||0);
+    } else {
+      M.units+=(Number(b.units_used)||0); M.amount+=(Number(b.total_amount)||0);
+    }
+  });
+  var anySplit=months.some(function(m){return m.split;});
+  var tUnits=0,tAmount=0,tcU=0,tcA=0,thU=0,thA=0,filled=0,maxA=-1,minA=-1,maxM=-1,minM=-1;
+  months.forEach(function(m,i){ tUnits+=m.units; tAmount+=m.amount; tcU+=m.cUnits; tcA+=m.cAmount; thU+=m.hUnits; thA+=m.hAmount; if(m.n>0){ filled++; if(maxA<0||m.amount>maxA){maxA=m.amount;maxM=i;} if(minA<0||m.amount<minA){minA=m.amount;minM=i;} } });
+  var rows=months.map(function(m,i){
+    if(m.n===0) return '<tr class="text-muted"><td>'+MON[i]+'</td><td class="r">-</td><td class="r">-</td>'+(anySplit?'<td class="r">-</td><td class="r">-</td>':'')+'</tr>';
+    var base='<tr><td>'+MON[i]+'</td><td class="r">'+F.fmtNum(m.units)+'</td><td class="r">'+F.fmtMoney(m.amount)+'</td>';
+    if(anySplit){ base+='<td class="r text-muted">'+(m.split?F.fmtNum(m.hUnits):'-')+'</td><td class="r text-muted">'+(m.split?F.fmtMoney(m.hAmount):'-')+'</td>'; }
+    return base+'</tr>';
+  }).join('');
+  var unit = isElec?'kWh':'units';
+  var hcols = anySplit? '<th class="r">Home units</th><th class="r">Home \u0e3f</th>' : '';
+  var head = '<thead><tr><th>Month</th><th class="r">'+(anySplit?'Central ':'')+unit+'</th><th class="r">'+(anySplit?'Central \u0e3f':'\u0e3f')+'</th>'+hcols+'</tr></thead>';
+  var avg = filled? tAmount/filled : 0;
+  var summary = '<div class="kpi-grid" style="margin-bottom:10px">'
+    + '<div class="kpi"><div class="kpi-label">Total units ('+year+')</div><div class="kpi-val">'+F.fmtNum(tUnits)+'</div></div>'
+    + '<div class="kpi"><div class="kpi-label">Total '+(anySplit?'central ':'')+'spend</div><div class="kpi-val text-error">'+F.fmtMoney(tAmount)+'</div></div>'
+    + '<div class="kpi"><div class="kpi-label">Avg / month</div><div class="kpi-val">'+F.fmtMoney(avg)+'</div></div>'
+    + '<div class="kpi"><div class="kpi-label">Highest</div><div class="kpi-val">'+(maxM>=0?MON[maxM]+' '+F.fmtMoney(maxA):'-')+'</div></div>'
+    + '<div class="kpi"><div class="kpi-label">Lowest</div><div class="kpi-val">'+(minM>=0?MON[minM]+' '+F.fmtMoney(minA):'-')+'</div></div>'
+    + '</div>';
+  var totalRow = '<tr style="font-weight:700;border-top:2px solid var(--border2)"><td>Total</td><td class="r">'+F.fmtNum(tUnits)+'</td><td class="r text-error">'+F.fmtMoney(tAmount)+'</td>'+(anySplit?'<td class="r">'+F.fmtNum(thU)+'</td><td class="r">'+F.fmtMoney(thA)+'</td>':'')+'</tr>';
+  var note = anySplit? '<p class="text-muted" style="font-size:10px;padding:2px 0">* This meter type has split (piggybacked) bills. \u201cCentral\u201d = common-area expense recorded; \u201cHome\u201d = resident share (reference).</p>' : '';
+  return summary + '<table class="tbl">'+head+'<tbody>'+rows+totalRow+'</tbody></table>' + note;
+}
+function renderReports(){
   const D = await window.CM_REPO.all();
   const body = document.getElementById('fin-body');
   const income = D.payments.reduce((s,p)=>s+(Number(p.paid_amount)||0),0);
@@ -321,6 +369,15 @@ async function renderReports(){
   const purposeRows = Object.keys(byPurpose).sort((a,b)=>byPurpose[b]-byPurpose[a])
     .map(k=>`<tr><td>${F.esc(k)}</td><td class="r text-error">${F.fmtMoney(byPurpose[k])}</td></tr>`).join('');
 
+  // ---- Yearly utility report data prep ----
+  var _allBills = (D.utility_bills||[]);
+  var _years = {};
+  _allBills.forEach(function(b){ var y=(b.period||'').split('-')[0]; if(y) _years[y]=1; });
+  _years[String(_utilRptYear)]=1; _years[String(new Date().getFullYear())]=1;
+  var _yearList = Object.keys(_years).sort(function(a,b){return b-a;});
+  var _yearOpts = _yearList.map(function(y){ return '<option value="'+y+'"'+(parseInt(y,10)===_utilRptYear?' selected':'')+'>'+y+'</option>'; }).join('');
+  var _utilReportHtml = _utilYearReport(_allBills, _utilRptType, _utilRptYear);
+
   const kpi=(label,val,cls)=>`<div class="kpi"><div class="kpi-label">${label}</div><div class="kpi-val ${cls||''}">${F.fmtMoney(val)}</div></div>`;
   body.innerHTML = `
     <div class="kpi-grid">
@@ -337,6 +394,19 @@ async function renderReports(){
                     : `<p class="text-muted" style="padding:8px">No utility bills recorded yet.</p>`}
     </div>
     <div class="card">
+      <h2><i class="fa-solid fa-chart-column"></i> Yearly Utility Usage Report</h2>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+        <label class="text-muted" style="font-size:12px">Type:</label>
+        <select class="inp" onchange="setUtilRptType(this.value)">
+          <option value="electricity"${_utilRptType==='electricity'?' selected':''}>\u0e44\u0e1f\u0e1f\u0e49\u0e32 Electricity</option>
+          <option value="water"${_utilRptType==='water'?' selected':''}>\u0e19\u0e49\u0e33 Water</option>
+        </select>
+        <label class="text-muted" style="font-size:12px;margin-left:8px">Year:</label>
+        <select class="inp" onchange="setUtilRptYear(this.value)">${_yearOpts}</select>
+      </div>
+      ${_utilReportHtml}
+    </div>
+    <div class="card">
       <h2><i class="fa-solid fa-circle-info"></i> Summary</h2>
       <p class="text-muted" style="line-height:1.7;padding:4px 0">
         Collected <b class="text-success">${F.fmtMoney(income)}</b> in fees to date.
@@ -349,6 +419,8 @@ async function renderReports(){
 }
 
 window.renderFinance = renderFinance;
+window.setUtilRptYear = setUtilRptYear;
+window.setUtilRptType = setUtilRptType;
 window.finSub = finSub;
 window.addFeeType = addFeeType;
 window.delFeeType = delFeeType;

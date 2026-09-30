@@ -314,4 +314,7 @@ window.importJSON = importJSON;
 window.resetAll = resetAll;
 window.toggleTheme = toggleTheme;
 
-document.addEventListener('DOMContentLoaded', boot);
+/* Boot now if the DOM is already parsed (dynamic-loaded scripts can attach AFTER
+   DOMContentLoaded has already fired), otherwise wait for it. */
+if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', boot); }
+else { boot(); }
