@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<title>VillageMan</title>
+<link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32.png?v=2">
+<link rel="icon" type="image/png" sizes="64x64" href="images/favicon-64.png?v=2">
+<link rel="apple-touch-icon" sizes="180x180" href="images/favicon-180.png?v=2">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+:root{--bg:#f5f6f8;--bg2:#fff;--bg3:#f0f1f4;--surface:#e8eaef;--border:#d4d7e0;--border2:#c0c4d0;--text:#1a1d27;--text2:#4a5068;--text3:#7a8098;--primary:#4a7aed;--primary-bg:rgba(74,122,237,.1);--success:#16a34a;--success-bg:rgba(22,163,74,.08);--warning:#d97706;--warning-bg:rgba(217,119,6,.08);--error:#dc2626;--error-bg:rgba(220,38,38,.08);--purple:#7c3aed;--purple-bg:rgba(124,58,237,.08);--radius:8px;--radius-sm:6px;--font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;--mono:'SF Mono','Fira Code','Cascadia Code',monospace;--shadow:0 1px 3px rgba(0,0,0,.06)}
+html.dark{--bg:#0f1117;--bg2:#1a1d27;--bg3:#252833;--surface:#2a2d3a;--border:#353849;--border2:#454860;--text:#e8eaed;--text2:#9aa0b0;--text3:#6b7185;--primary:#5b8def;--primary-bg:rgba(91,141,239,.12);--success:#4ade80;--success-bg:rgba(74,222,128,.1);--warning:#fbbf24;--warning-bg:rgba(251,191,36,.1);--error:#f87171;--error-bg:rgba(248,113,113,.1);--purple:#a78bfa;--purple-bg:rgba(167,139,250,.1);--shadow:0 1px 3px rgba(0,0,0,.3)}
+*{box-sizing:border-box;margin:0;padding:0}body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px}
+.layout{display:flex;min-height:100vh}
+.sidebar{width:210px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;flex-shrink:0}
+.brand{padding:16px 16px 12px;border-bottom:1px solid var(--border)}
+.brand-title{font-size:15px;font-weight:700;display:flex;align-items:center;gap:7px}
+.brand-sub{font-size:10px;color:var(--text3);margin-top:2px}
+.nav-items{flex:1;padding:8px;display:flex;flex-direction:column;gap:2px;overflow-y:auto}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 11px;border:none;background:none;border-radius:var(--radius-sm);font-size:12px;font-weight:500;color:var(--text2);cursor:pointer;font-family:var(--font);text-align:left;transition:all .15s}
+.nav-item:hover{background:var(--bg3);color:var(--text)}
+.nav-item.active{background:var(--primary);color:#fff;font-weight:600;box-shadow:0 1px 4px rgba(74,122,237,.3)}
+.nav-item i{width:16px;text-align:center;font-size:12px}
+.sidebar-foot{padding:8px;border-top:1px solid var(--border)}
+.theme-btn{width:100%;background:none;border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px;cursor:pointer;color:var(--text2);font-size:11px;display:flex;align-items:center;justify-content:center;gap:5px;font-family:var(--font)}
+.theme-btn:hover{background:var(--bg3)}
+.content{flex:1;overflow-x:hidden}
+.main{max-width:1100px;margin:0 auto;padding:18px}
+.tab-content{display:none}.tab-content.active{display:block}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px;box-shadow:var(--shadow)}
+.card h2{font-size:13px;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:10px}
+.kpi{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;box-shadow:var(--shadow)}
+.kpi-label{font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3)}
+.kpi-val{font-size:17px;font-weight:700;font-family:var(--mono);margin-top:2px}
+.tbl{width:100%;border-collapse:collapse;font-size:11px}
+.tbl th{text-align:left;padding:6px;background:var(--bg3);border-bottom:2px solid var(--border);font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:var(--text3);font-weight:600}
+.tbl th.r,.tbl td.r{text-align:right}
+.tbl td{padding:5px 6px;border-bottom:1px solid var(--border)}
+.tbl tr:hover{background:rgba(128,128,128,.04)}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:9px;align-items:end}
+.form-group{display:flex;flex-direction:column;gap:3px}
+.form-group label{font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:var(--text3);font-weight:500}
+.inp{padding:6px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:var(--font);font-size:11px}
+.inp:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-bg)}
+.btn{padding:6px 12px;border:none;border-radius:var(--radius-sm);font-size:10px;font-weight:600;cursor:pointer;font-family:var(--font);display:inline-flex;align-items:center;gap:5px}
+.btn-primary{background:var(--primary);color:#fff}.btn-primary:hover{opacity:.9}
+.btn:active{transform:scale(0.96);opacity:.8}
+.btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border)}.btn-ghost:hover{background:var(--bg3)}
+.tag{display:inline-block;font-size:8px;padding:2px 6px;border-radius:8px;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+.tag-active{background:var(--success-bg);color:var(--success)}.tag-planned{background:var(--warning-bg);color:var(--warning)}.tag-finished{background:var(--bg3);color:var(--text3)}
+.del-btn{background:none;border:none;color:var(--text3);cursor:pointer;padding:3px 5px;font-size:11px}.del-btn:hover{color:var(--primary)}
+.flex{display:flex}.gap-2{gap:8px}.flex-wrap{flex-wrap:wrap}
+.text-success{color:var(--success)}.text-error{color:var(--error)}.text-warning{color:var(--warning)}.text-primary{color:var(--primary)}.text-muted{color:var(--text3)}
+.toast{position:fixed;bottom:16px;right:16px;background:var(--success);color:#fff;padding:8px 14px;border-radius:var(--radius-sm);font-size:11px;font-weight:600;opacity:0;transition:opacity .3s;pointer-events:none;z-index:200}.toast.show{opacity:1}
+.type-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;font-size:10px}.type-chip .x{cursor:pointer;color:var(--text3);font-size:9px}.type-chip .x:hover{color:var(--error)}
+.inp-num{font-family:var(--mono);text-align:right}
+@media(max-width:720px){.layout{flex-direction:column}.sidebar{width:100%;height:auto;position:relative;flex-direction:row;flex-wrap:wrap}.nav-items{flex-direction:row;flex-wrap:wrap}.form-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-title"><i class="fa-solid fa-city" style="color:var(--primary)"></i> <span id="brand-estate">VillageMan</span></div>
+      <div class="brand-sub">VillageMan</div>
+    </div>
+    <nav class="nav-items">
+      <button class="nav-item active" data-tab="dashboard"><i class="fa-solid fa-chart-line"></i> Dashboard</button>
+      <button class="nav-item" data-tab="finance"><i class="fa-solid fa-coins"></i> Finance</button>
+      <button class="nav-item" data-tab="utilities"><i class="fa-solid fa-bolt"></i> Utilities</button>
+      <button class="nav-item" data-tab="households"><i class="fa-solid fa-house-user"></i> Households</button>
+      <button class="nav-item" data-tab="vendors"><i class="fa-solid fa-screwdriver-wrench"></i> Vendors</button>
+      <button class="nav-item" data-tab="emergency"><i class="fa-solid fa-kit-medical"></i> Emergency</button>
+      <button class="nav-item" data-tab="settings"><i class="fa-solid fa-gear"></i> Settings</button>
+    </nav>
+    <div class="sidebar-foot">
+      <button class="theme-btn" id="theme-toggle"><i class="fa-solid fa-moon"></i> Dark</button>
+    </div>
+  </aside>
+  <div class="content">
+    <div class="main">
+      <div id="toast" class="toast"></div>
+      <div id="tab-dashboard" class="tab-content active"></div>
+      <div id="tab-finance" class="tab-content"></div>
+      <div id="tab-utilities" class="tab-content"></div>
+      <div id="tab-households" class="tab-content"></div>
+      <div id="tab-vendors" class="tab-content"></div>
+      <div id="tab-emergency" class="tab-content"></div>
+      <div id="tab-settings" class="tab-content"></div>
+    </div>
+  </div>
+</div>
+
+<!-- QR library for PromptPay - loaded with an error guard so a CDN failure can NEVER break the app.
+     If it fails to load (offline), the payment panel falls back to showing the PromptPay ID + amount as text. -->
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" onerror="window.__QR_CDN_FAILED__=true;"></script>
+
+<!-- App modules - order matters: data/util/repo first, then features, then app boot. Cache-busted. -->
+<script src="js/data.js?v=15"></script>
+<script src="js/util.js?v=15"></script>
+<script src="js/repo.js?v=15"></script>
+<script src="js/promptpay.js?v=15"></script>
+<script src="js/ui-dashboard.js?v=15"></script>
+<script src="js/ui-households.js?v=15"></script>
+<script src="js/ui-finance.js?v=15"></script>
+<script src="js/ui-utilities.js?v=15"></script>
+<script src="js/ui-vendors.js?v=15"></script>
+<script src="js/ui-emergency.js?v=15"></script>
+<script src="js/app.js?v=15"></script>
+</body>
+</html>
