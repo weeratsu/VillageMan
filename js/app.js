@@ -6,6 +6,7 @@ const ROUTES = {
   households: window.renderHouseholds,
   finance: window.renderFinance,
   utilities: window.renderUtilities,
+  pubreport: window.renderPubReport,
   vendors: window.renderVendors,
   emergency: window.renderEmergency,
   settings: renderSettings
@@ -32,6 +33,7 @@ async function renderSettings(){
       <div class="form-grid">
         <div class="form-group"><label>Estate / Village Name</label><input class="inp" id="set-estate" value="${A_UTIL.esc(meta.estate_name||'')}" placeholder="e.g. Baan Suan Village"></div>
         <div class="form-group"><label>PromptPay ID (mobile or national/tax ID)</label><input class="inp" id="set-ppid" value="${A_UTIL.esc(meta.promptpay_id||'')}" placeholder="0812345678"></div>
+        <div class="form-group"><label>Meter photo base folder</label><input class="inp" id="set-meter_base" value="${A_UTIL.esc(meta.meter_photo_base||'meter-photos')}" placeholder="meter-photos"></div>
         <div class="form-group" style="justify-content:flex-end"><button class="btn btn-primary" onclick="saveSettings()"><i class="fa-solid fa-check"></i> Save Settings</button></div>
       </div>
     </div>
@@ -39,6 +41,7 @@ async function renderSettings(){
       <h2><i class="fa-solid fa-database"></i> Backup & Data</h2>
       <div class="flex gap-2 flex-wrap" style="padding:4px 0">
         <button class="btn btn-ghost" onclick="exportJSON()"><i class="fa-solid fa-download"></i> Export JSON</button>
+        <button class="btn btn-ghost" onclick="exportMeters()"><i class="fa-solid fa-database"></i> Export meters.json</button>
         <label class="btn btn-ghost" style="cursor:pointer"><i class="fa-solid fa-upload"></i> Import JSON<input type="file" accept="application/json" style="display:none" onchange="importJSON(event)"></label>
         <button class="btn btn-ghost text-error" onclick="resetAll()"><i class="fa-solid fa-trash"></i> Reset All Data</button>
       </div>
@@ -215,9 +218,11 @@ async function resetList(key){
 
 async function saveSettings(){
   const repo = window.CM_REPO;
+  var _mb=document.getElementById('set-meter_base');
   await repo.setMeta({
     estate_name: document.getElementById('set-estate').value.trim(),
-    promptpay_id: document.getElementById('set-ppid').value.trim()
+    promptpay_id: document.getElementById('set-ppid').value.trim(),
+    meter_photo_base: (_mb?_mb.value.trim():'')||'meter-photos'
   });
   A_UTIL.toast('Settings saved');
   const meta = await repo.meta();
@@ -232,6 +237,24 @@ async function exportJSON(){
   a.href = url; a.download = 'community_' + A_UTIL.todayISO() + '.json';
   a.click(); URL.revokeObjectURL(url);
   A_UTIL.toast('Exported');
+}
+
+/* Export a lightweight meters.json for the photo-organizer script to read.
+   The script runs outside the browser (no localStorage access), so it maps a
+   bill's meter -> central meter number via this file. Includes sub->parent links. */
+async function exportMeters(){
+  const D = await window.CM_REPO.all();
+  const meters = (D.meters||[]).map(function(m){
+    return { id:m.id, purpose:m.purpose||'', utility_type:m.utility_type||'',
+             ca_no:m.ca_no||'', installation:m.installation||'',
+             role:m.role||'main', parent_meter_id:m.parent_meter_id||'' };
+  });
+  const blob = new Blob([JSON.stringify({meters:meters}, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'meters.json';
+  a.click(); URL.revokeObjectURL(url);
+  A_UTIL.toast('meters.json exported - save it next to the script');
 }
 
 function importJSON(ev){
@@ -278,11 +301,21 @@ function wireNav(){
   if(tt) tt.addEventListener('click', toggleTheme);
 }
 
+/* Sidebar Today date (same as CashMan). */
+function _updateToday(){
+  try{ var el=document.querySelector('#sb-today .sb-today-txt'); if(!el) return;
+    var d=new Date();
+    var days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    var mons=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    el.textContent='Today: '+days[d.getDay()]+' '+d.getDate()+' '+mons[d.getMonth()]+' '+d.getFullYear();
+  }catch(e){}
+}
 async function boot(){
   try {
     if(localStorage.getItem('cm_theme')==='dark') document.documentElement.classList.add('dark');
     // Wire clicks BEFORE any await \u2014 a data error must never leave the nav dead.
     wireNav();
+    try{ _updateToday(); }catch(e){}
 
     if(!window.CM_REPO){ showBootError('Data layer failed to load (CM_REPO undefined). A script likely failed to parse \u2014 check the browser console.'); return; }
     const meta = await window.CM_REPO.meta();
@@ -310,6 +343,7 @@ window.tariffRemove = tariffRemove;
 window.tariffReset = tariffReset;
 window.saveRates = saveRates;
 window.exportJSON = exportJSON;
+window.exportMeters = exportMeters;
 window.importJSON = importJSON;
 window.resetAll = resetAll;
 window.toggleTheme = toggleTheme;

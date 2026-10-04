@@ -63,6 +63,52 @@ function _usageTrendCard(bills, type, title, icon){
     +'<div style="font-size:11px;color:var(--text3);margin:8px 0 4px">\u0e40\u0e1b\u0e23\u0e35\u0e22\u0e1a\u0e40\u0e17\u0e35\u0e22\u0e1a YoY \u0e40\u0e14\u0e37\u0e2d\u0e19\u0e40\u0e14\u0e35\u0e22\u0e27\u0e01\u0e31\u0e19\u0e1b\u0e35\u0e01\u0e48\u0e2d\u0e19</div>'
     +'<table class="tbl"><thead><tr><th>\u0e40\u0e14\u0e37\u0e2d\u0e19</th><th class="r">\u0e1b\u0e35\u0e19\u0e35\u0e49</th><th class="r">\u0e1b\u0e35\u0e01\u0e48\u0e2d\u0e19</th><th class="r">YoY</th></tr></thead><tbody>'+yoy+'</tbody></table></div>';
 }
+/* Common-area (central) COST per month across electricity+water, excluding home_only bills.
+   split bill -> central_amount ; flat non-home_only bill -> total_amount (dedicated common meter). */
+function _centralByMonth(bills){
+  var map={};
+  (bills||[]).forEach(function(b){
+    if(b.home_only) return;
+    var per=(b.period||''); if(!/^\d{4}-\d{2}$/.test(per)) return;
+    var amt=b.split_meter ? (Number(b.central_amount)||0) : (Number(b.total_amount)||0);
+    if(!map[per]) map[per]=0;
+    map[per]+=amt;
+  });
+  return map;
+}
+function _centralTrendSvg(map, months){
+  var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var vals=months.map(function(m){ return map[m]||0; });
+  var max=Math.max.apply(null, vals.concat([1]));
+  var W=640,H=160,padT=10,padB=22,padL=8,padR=8; var n=months.length; var bw=(W-padL-padR)/n; var bars='';
+  for(var i=0;i<n;i++){
+    var v=vals[i]; var bh=max>0?(v/max)*(H-padT-padB):0;
+    var x=padL+i*bw+bw*0.15, y=H-padB-bh, w=bw*0.7;
+    var mi=parseInt(months[i].split('-')[1],10)-1; var lbl=MON[mi];
+    var fill=(i===n-1)?'var(--error)':'var(--error-bg)';
+    var stroke=(i===n-1)?'var(--error)':'var(--border2)';
+    bars+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+w.toFixed(1)+'" height="'+Math.max(0,bh).toFixed(1)+'" rx="2" fill="'+fill+'" stroke="'+stroke+'"><title>'+months[i]+': '+D_UTIL.fmtMoney(v)+'</title></rect>';
+    if(v>0){ bars+='<text x="'+(x+w/2).toFixed(1)+'" y="'+(y-2).toFixed(1)+'" text-anchor="middle" font-size="7" fill="var(--text3)">'+Math.round(v)+'</text>'; }
+    bars+='<text x="'+(x+w/2).toFixed(1)+'" y="'+(H-padB+10)+'" text-anchor="middle" font-size="8" fill="var(--text3)">'+lbl+'</text>';
+  }
+  return '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" preserveAspectRatio="xMidYMid meet">'+bars+'</svg>';
+}
+function _centralTrendCard(bills){
+  var map=_centralByMonth(bills); var months=_lastMonths(12);
+  var hasData=Object.keys(map).length>0;
+  var title='\u0e04\u0e48\u0e32\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07\u0e23\u0e32\u0e22\u0e40\u0e14\u0e37\u0e2d\u0e19 (Common-area Trend)';
+  if(!hasData){ return '<div class="card"><h2><i class="fa-solid fa-users"></i> '+title+'</h2><p class="text-muted" style="padding:8px">\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25</p></div>'; }
+  var cur=D_UTIL.curPeriod(); var thisMo=map[cur]||0;
+  var yr=cur.slice(0,4); var ytd=0; Object.keys(map).forEach(function(k){ if(k.slice(0,4)===yr) ytd+=map[k]; });
+  return '<div class="card"><h2><i class="fa-solid fa-users"></i> '+title+'</h2>'
+    +'<div style="display:flex;gap:16px;font-size:12px;margin-bottom:6px">'
+      +'<span class="text-muted">\u0e40\u0e14\u0e37\u0e2d\u0e19\u0e19\u0e35\u0e49: <b class="text-error">'+D_UTIL.fmtMoney(thisMo)+'</b></span>'
+      +'<span class="text-muted">\u0e23\u0e27\u0e21\u0e1b\u0e35 '+yr+': <b>'+D_UTIL.fmtMoney(ytd)+'</b></span>'
+    +'</div>'
+    +_centralTrendSvg(map, months)
+    +'<p class="text-muted" style="font-size:9px;margin-top:4px">* \u0e44\u0e21\u0e48\u0e23\u0e27\u0e21\u0e1a\u0e34\u0e25\u0e1a\u0e49\u0e32\u0e19\u0e25\u0e49\u0e27\u0e19 (home-only)</p>'
+    +'</div>';
+}
 async function renderDashboard(){
   const repo = window.CM_REPO;
   const D = await repo.all();
@@ -115,6 +161,7 @@ async function renderDashboard(){
     <div class="kpi-grid">${kpis}</div>
     ${_usageTrendCard(D.utility_bills||[], 'electricity', '\u0e41\u0e19\u0e27\u0e42\u0e19\u0e49\u0e21\u0e01\u0e32\u0e23\u0e43\u0e0a\u0e49\u0e44\u0e1f\u0e1f\u0e49\u0e32 (Electricity Trend)', 'fa-bolt')}
     ${_usageTrendCard(D.utility_bills||[], 'water', '\u0e41\u0e19\u0e27\u0e42\u0e19\u0e49\u0e21\u0e01\u0e32\u0e23\u0e43\u0e0a\u0e49\u0e19\u0e49\u0e33 (Water Trend)', 'fa-droplet')}
+    ${_centralTrendCard(D.utility_bills||[])}
     <div class="card">
       <h2><i class="fa-solid fa-triangle-exclamation"></i> Overdue Households</h2>
       ${overdue ? `<table class="tbl"><thead><tr><th>House</th><th>Owner</th><th>Fee</th><th>Period</th><th class="r">Balance</th></tr></thead><tbody>${overdue}</tbody></table>`

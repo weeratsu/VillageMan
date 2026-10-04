@@ -27,8 +27,14 @@ function fmtMoney(n){
   return '\u0e3f' + v.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
 }
 function fmtNum(n){
+  // Unit quantities (meter readings, kWh/m3 used) display as plain integers: #### (no comma, no decimals).
   const v = Number(n) || 0;
-  return v.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+  return String(Math.round(v));
+}
+function fmtRate(n){
+  // Per-unit price / tariff rate keeps up to 4 decimals (e.g. 3.0000, 4.1584).
+  const v = Number(n) || 0;
+  return v.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:4});
 }
 
 /* ---- Receipt numbers: RC-YYYY-0001 ---- */
@@ -98,6 +104,18 @@ function receiptTarget(category, period, descParts, ext){
   return { folder, filename, path: `${folder}/${filename}` };
 }
 
+/* Meter-photo filing target (parallel to receiptTarget, but under meter-photos/).
+   Used for central/common-area meter reading-evidence photos per period. */
+function meterPhotoTarget(category, period, descParts, ext, baseDir){
+  const { year, month } = periodParts(period);
+  const cat = slugify(category||'other');
+  const base = (baseDir||'meter-photos').replace(/\/+$/,'');
+  const folder = `${base}/${cat}/${year}`;
+  const desc = descParts.filter(Boolean).map(slugify).join('_');
+  const filename = `${desc||'meter'}.${(ext||'jpg').replace(/^\./,'')}`;
+  return { folder, filename, path: `${folder}/${filename}` };
+}
+
 /* ---- Managed dropdown lists ----
    Built-in defaults for each editable list. Settings can override these
    (stored in meta.lists). getList() returns the user's list if present and
@@ -122,13 +140,13 @@ function getList(meta, key){
 
 /* ---- Tiered (stepped) electricity energy tariff ----
    Default = MEA residential >150 units/month (\u0e1b\u0e23\u0e30\u0e40\u0e20\u0e17 1.2), derived from the
-   user's bill: tier boundaries 1-150 / 151-400 / 401+ at these per-unit rates.
+   user's bill: tier boundaries 1-200 / 201-400 / 401+ at these per-unit rates (MEA type 1.2, >150 kWh/mo).
    Editable in Settings, stored in meta.tariff as [{upto, rate}, ...] where
    `upto` is the cumulative unit ceiling of the tier (null = no ceiling/last). */
 const TARIFF_DEFAULT = [
-  { upto: 150,  rate: 3.2484 },
-  { upto: 400,  rate: 4.2218 },
-  { upto: null, rate: 4.4217 }
+  { upto: 200,  rate: 3.0000 },
+  { upto: 400,  rate: 4.1584 },
+  { upto: null, rate: 4.3583 }
 ];
 /* Return the tariff tiers from meta.tariff, else the default. Fresh array. */
 function getTariff(meta){
@@ -175,7 +193,7 @@ function getRates(meta){
   };
 }
 
-window.CM_UTIL = { uid, fmtDate, parseDMY, todayISO, curPeriod, fmtMoney, fmtNum,
+window.CM_UTIL = { uid, fmtDate, parseDMY, todayISO, curPeriod, fmtMoney, fmtNum, fmtRate,
                    nextReceiptNo, esc, chargeBalance, chargeStatus, toast,
-                   slugify, periodParts, receiptTarget, LIST_DEFAULTS, getList,
+                   slugify, periodParts, receiptTarget, meterPhotoTarget, LIST_DEFAULTS, getList,
                    TARIFF_DEFAULT, getTariff, calcTiered, RATES_DEFAULT, getRates };

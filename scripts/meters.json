@@ -1,0 +1,22 @@
+{
+  "meters": [
+    {
+      "id": "idmut7dt83lmrmz",
+      "purpose": "Electricity Meter - 122/1",
+      "utility_type": "electricity",
+      "ca_no": "010961575",
+      "installation": "68221246",
+      "role": "main",
+      "parent_meter_id": ""
+    },
+    {
+      "id": "idmut7hh1uvf4rc",
+      "purpose": "Electricity Meter - Common Area",
+      "utility_type": "electricity",
+      "ca_no": "",
+      "installation": "9788192",
+      "role": "sub",
+      "parent_meter_id": "idmut7dt83lmrmz"
+    }
+  ]
+}

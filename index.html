@@ -6,9 +6,9 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <title>VillageMan</title>
-<link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32.png?v=2">
-<link rel="icon" type="image/png" sizes="64x64" href="images/favicon-64.png?v=2">
-<link rel="apple-touch-icon" sizes="180x180" href="images/favicon-180.png?v=2">
+<link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32.png?v=5">
+<link rel="icon" type="image/png" sizes="64x64" href="images/favicon-64.png?v=5">
+<link rel="apple-touch-icon" sizes="180x180" href="images/favicon-180.png?v=5">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <style>
 :root{--bg:#f5f6f8;--bg2:#fff;--bg3:#f0f1f4;--surface:#e8eaef;--border:#d4d7e0;--border2:#c0c4d0;--text:#1a1d27;--text2:#4a5068;--text3:#7a8098;--primary:#4a7aed;--primary-bg:rgba(74,122,237,.1);--success:#16a34a;--success-bg:rgba(22,163,74,.08);--warning:#d97706;--warning-bg:rgba(217,119,6,.08);--error:#dc2626;--error-bg:rgba(220,38,38,.08);--purple:#7c3aed;--purple-bg:rgba(124,58,237,.08);--radius:8px;--radius-sm:6px;--font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;--mono:'SF Mono','Fira Code','Cascadia Code',monospace;--shadow:0 1px 3px rgba(0,0,0,.06)}
@@ -122,10 +122,12 @@ tr.bill-detail td{border-top:none}
       <div class="brand-title"><i class="fa-solid fa-city" style="color:var(--primary)"></i> <span id="brand-estate">VillageMan</span></div>
       <div class="brand-sub">VillageMan</div>
     </div>
+    <div id="sb-today" style="font-size:10.5px;color:var(--text2);padding:6px 10px;margin:10px 12px 4px;background:var(--bg);border:1px solid var(--border);border-radius:8px;white-space:nowrap;overflow:hidden;display:flex;align-items:center;gap:6px" title="Today's date"><i class="fa-solid fa-calendar-day" style="color:var(--primary)"></i> <span class="sb-today-txt"></span></div>
     <nav class="nav-items">
       <button class="nav-item active" data-tab="dashboard"><i class="fa-solid fa-chart-line"></i> Dashboard</button>
       <button class="nav-item" data-tab="finance"><i class="fa-solid fa-coins"></i> Finance</button>
       <button class="nav-item" data-tab="utilities"><i class="fa-solid fa-bolt"></i> Utilities</button>
+      <button class="nav-item" data-tab="pubreport"><i class="fa-solid fa-users"></i> สรุปส่วนกลาง</button>
       <button class="nav-item" data-tab="households"><i class="fa-solid fa-house-user"></i> Households</button>
       <button class="nav-item" data-tab="vendors"><i class="fa-solid fa-screwdriver-wrench"></i> Vendors</button>
       <button class="nav-item" data-tab="emergency"><i class="fa-solid fa-kit-medical"></i> Emergency</button>
@@ -141,6 +143,7 @@ tr.bill-detail td{border-top:none}
       <div id="tab-dashboard" class="tab-content active"></div>
       <div id="tab-finance" class="tab-content"></div>
       <div id="tab-utilities" class="tab-content"></div>
+      <div id="tab-pubreport" class="tab-content"></div>
       <div id="tab-households" class="tab-content"></div>
       <div id="tab-vendors" class="tab-content"></div>
       <div id="tab-emergency" class="tab-content"></div>
@@ -160,8 +163,16 @@ tr.bill-detail td{border-top:none}
    often ignored and the browser caches JS hard). No more manual version bumping. */
 (function(){
   var files = ['data','util','repo','promptpay','ui-dashboard','ui-households',
-               'ui-finance','ui-utilities','ui-vendors','ui-emergency','app'];
+               'ui-finance','ui-utilities','ui-pubreport','ui-vendors','ui-emergency','app'];
   var bust = Date.now();               // unique per load -> always bypasses cache
+  // Load the shared UtilityLog data (home MEA/MWA bills) from CashMan's data folder first,
+  // so window.UTILITY_DATA is available for the Bills auto-fill. Optional: continue if missing.
+  (function(){
+    var u=document.createElement('script');
+    u.src='../CashMan/data/utility_log.js?t='+bust;
+    u.onerror=function(){ window.UTILITY_DATA=window.UTILITY_DATA||{bills:[]}; };
+    document.head.appendChild(u);
+  })();
   function loadNext(i){
     if(i >= files.length) return;
     var s = document.createElement('script');
