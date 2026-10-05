@@ -104,13 +104,22 @@ async function renderPubReport(){
     if(r===0){ r=(a.period||'').localeCompare(b.period||''); }
     return _pubAsc? r : -r;
   });
+  function _catOf(type){ var t=(type||'').toLowerCase(); if(t.indexOf('w')===0||t.indexOf('water')>=0||t.indexOf('\u0e19')>=0) return 'water'; return 'electricity'; }
   function _guessPhotoPath(b){
-    // Build the path the organizer script / app Suggest would produce:
-    //   <base>/<category>/<periodYear>/<meterNo>_<period>.jpg
-    // Period-based (not shot date) so all three agree. Needs a meter number + period.
+    // Resolve the meter photo path. The organizer script may append the EXIF shot date to the
+    // filename (<meterNo>_<period>_<YYYY-MM-DD>.jpg), so we first look up the REAL filename in
+    // window.VM_PHOTO_INDEX (written by organize_meter_photos.py, keyed <cat>/<year>/<meterNo>_<period>).
+    // Fall back to the plain period-based path when the index is unavailable.
     var period = b.period || ''; if(!period) return '';
     var meterNo = _meterNo(b); if(!meterNo || meterNo==='-') return '';
     var type = b.utility_type || 'electricity';
+    var year=(period.split('-')[0])||'';
+    var cat=_catOf(type);
+    var idx=window.VM_PHOTO_INDEX;
+    if(idx){
+      var key=cat+'/'+year+'/'+meterNo+'_'+period;
+      if(idx[key] && idx[key].file){ return _photoBase.replace(/\/+$/,'')+'/'+idx[key].file; }
+    }
     try {
       var t = U.meterPhotoTarget(type, period, [meterNo, period], 'jpg', _photoBase);
       return t.path;
@@ -140,14 +149,9 @@ async function renderPubReport(){
       +'<td class="r"><b>'+U.fmtMoney(central)+'</b></td>'
       +'<td class="r">'+(b.paid?'<span class="tag tag-active" style="font-size:9px">\u0e08\u0e48\u0e32\u0e22\u0e41\u0e25\u0e49\u0e27</span>':'<span class="tag tag-planned" style="font-size:9px">\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e08\u0e48\u0e32\u0e22</span>')+(b.paid&&b.paid_date?('<div style="font-size:8px;color:var(--text3);margin-top:2px">'+U.fmtDate(b.paid_date)+'</div>'):'')+'</td>'
       +'<td class="r">'+(function(){
-        var explicit=b.meter_photo_path||'';
-        var guess=explicit||_guessPhotoPath(b);
-        if(!guess) return dash;
-        var sid='ph-'+b.id;
-        // The link is hidden until the probe <img> confirms the file loads (file:// safe existence check).
-        return '<a id="'+sid+'" href="#" onclick="pubViewMedia(this.getAttribute(\'data-src\'),event);return false;" data-src="'+U.esc(guess)+'" title="'+U.esc(guess)+'" style="display:'+(explicit?'inline':'none')+'"><i class="fa-solid fa-camera text-primary"></i></a>'
-          + (explicit?'':'<img src="'+U.esc(guess)+'" style="display:none" onload="var a=document.getElementById(\''+sid+'\');if(a)a.style.display=\'inline\';var d=document.getElementById(\''+sid+'-dash\');if(d)d.style.display=\'none\';" onerror="this.remove();">')
-          + (explicit?'':'<span id="'+sid+'-dash">'+dash+'</span>');
+        var src=b.meter_photo_path||_guessPhotoPath(b);
+        if(!src) return dash;
+        return '<a href="#" onclick="pubViewMedia(this.getAttribute(\'data-src\'),event);return false;" data-src="'+U.esc(src)+'" title="'+U.esc(src)+'"><i class="fa-solid fa-camera text-primary"></i></a>';
       })()+'</td>'
       // when the probe succeeds we also hide the dash
 
@@ -157,7 +161,7 @@ async function renderPubReport(){
         +'<div style="font-weight:700;margin-bottom:4px"><i class="fa-solid fa-calculator"></i> \u0e27\u0e34\u0e18\u0e35\u0e04\u0e34\u0e14\u0e22\u0e2d\u0e14\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07 ('+U.esc(b.period||'')+')</div>'
         +'<div style="max-width:460px">'+_calcSteps(b)+'</div>'
         +'<div style="margin-top:6px;font-size:10px;color:var(--text3)">\u0e2b\u0e19\u0e48\u0e27\u0e22\u0e21\u0e34\u0e40\u0e15\u0e2d\u0e23\u0e4c\u0e23\u0e27\u0e21\u0e17\u0e31\u0e49\u0e07\u0e1a\u0e34\u0e25 '+U.fmtNum(Number(b.units_used)||0)+' \u2014 \u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07 '+U.fmtNum(Number(b.central_units)||0)+' / \u0e1a\u0e49\u0e32\u0e19 '+U.fmtNum(Number(b.home_units)||0)+'</div>'
-        +(b.meter_photo_path?('<div style="margin-top:6px"><a href="#" onclick="pubViewMedia(this.getAttribute(\'data-src\'),event);return false;" data-src="'+U.esc(b.meter_photo_path)+'"><i class="fa-solid fa-camera"></i> \u0e14\u0e39\u0e23\u0e39\u0e1b\u0e21\u0e34\u0e40\u0e15\u0e2d\u0e23\u0e4c\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07</a></div>'):'')+(b.invoice_path?('<div style="margin-top:3px"><a href="#" onclick="pubViewMedia(this.getAttribute(\'data-src\'),event);return false;" data-src="'+U.esc(b.invoice_path)+'"><i class="fa-solid fa-file-invoice"></i> \u0e43\u0e1a\u0e41\u0e08\u0e49\u0e07\u0e2b\u0e19\u0e35\u0e49 (Invoice)</a></div>'):'')+(b.receipt_path?('<div style="margin-top:3px"><a href="#" onclick="pubViewMedia(this.getAttribute(\'data-src\'),event);return false;" data-src="'+U.esc(b.receipt_path)+'"><i class="fa-solid fa-receipt"></i> \u0e43\u0e1a\u0e40\u0e2a\u0e23\u0e47\u0e08 (Receipt)</a></div>'):'')+'</td></tr>';
+        +(b.invoice_path?('<div style="margin-top:3px"><a href="#" onclick="pubViewMedia(this.getAttribute(\'data-src\'),event);return false;" data-src="'+U.esc(b.invoice_path)+'"><i class="fa-solid fa-file-invoice"></i> \u0e43\u0e1a\u0e41\u0e08\u0e49\u0e07\u0e2b\u0e19\u0e35\u0e49 (Invoice)</a></div>'):'')+(b.receipt_path?('<div style="margin-top:3px"><a href="#" onclick="pubViewMedia(this.getAttribute(\'data-src\'),event);return false;" data-src="'+U.esc(b.receipt_path)+'"><i class="fa-solid fa-receipt"></i> \u0e43\u0e1a\u0e40\u0e2a\u0e23\u0e47\u0e08 (Receipt)</a></div>'):'')+'</td></tr>';
     }
     return r;
   }).join('');
@@ -209,9 +213,75 @@ function pubViewMedia(src, ev){
   ov.innerHTML='<div style="position:relative">'
     + '<button onclick="pubCloseMedia()" style="position:absolute;top:-14px;right:-14px;width:32px;height:32px;border-radius:50%;border:0;background:#fff;color:#111;font-size:16px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.4)">&times;</button>'
     + inner
-    + '<div style="margin-top:8px;text-align:center"><a href="'+U.esc(src)+'" target="_blank" style="color:#fff;font-size:11px;opacity:.85">\u0e40\u0e1b\u0e34\u0e14\u0e43\u0e19\u0e41\u0e17\u0e47\u0e1a\u0e43\u0e2b\u0e21\u0e48</a></div>'
+    + '<div id="pub-media-exif" style="margin-top:8px;text-align:center;color:#fff;font-size:11px;opacity:.9;min-height:14px"></div>'
+    + '<div style="margin-top:4px;text-align:center"><a href="'+U.esc(src)+'" target="_blank" style="color:#fff;font-size:11px;opacity:.85">\u0e40\u0e1b\u0e34\u0e14\u0e43\u0e19\u0e41\u0e17\u0e47\u0e1a\u0e43\u0e2b\u0e21\u0e48</a></div>'
     + '</div>';
   ov.style.display='flex';
+  if(!isPdf){
+    var fnDate=_dateFromName(src);
+    if(fnDate){ var el=document.getElementById('pub-media-exif'); if(el) el.innerHTML='<i class="fa-solid fa-camera"></i> \u0e16\u0e48\u0e32\u0e22\u0e40\u0e21\u0e37\u0e48\u0e2d '+U.esc(fnDate); }
+    else { _showExifDate(src); }
+  }
+}
+
+/* Parse a shot date embedded in the filename: <meterNo>_<YYYY-MM>_<YYYY-MM-DD>.<ext> -> dd/mm/yyyy.
+   Works on file:// (no fetch needed). Returns '' if the name has no date segment. */
+function _dateFromName(src){
+  try{
+    var fn=String(src).split('/').pop().split('?')[0];
+    var m=fn.match(/_(\d{4})-(\d{2})-(\d{2})(?:_\d+)?\.[a-z]+$/i);
+    if(m) return m[3]+'/'+m[2]+'/'+m[1];
+  }catch(e){}
+  return '';
+}
+/* Read EXIF DateTimeOriginal (tag 0x9003) from a JPEG and show it in the lightbox.
+   Tolerant: if fetch is blocked (file://) or the tag is absent, it stays silent. */
+function _showExifDate(src){
+  try{
+    fetch(src).then(function(r){ return r.arrayBuffer(); }).then(function(buf){
+      var dt=_parseExifDateTime(new DataView(buf));
+      if(!dt) return;
+      var el=document.getElementById('pub-media-exif');
+      if(el) el.innerHTML='<i class="fa-solid fa-camera"></i> \u0e16\u0e48\u0e32\u0e22\u0e40\u0e21\u0e37\u0e48\u0e2d '+U.esc(dt);
+    }).catch(function(){});
+  }catch(e){}
+}
+/* Minimal JPEG/Exif parser: returns "dd/mm/yyyy HH:MM" from DateTimeOriginal, or '' if not found. */
+function _parseExifDateTime(dv){
+  try{
+    if(dv.getUint16(0)!==0xFFD8) return '';   // not a JPEG
+    var off=2, len=dv.byteLength;
+    while(off+4<len){
+      if(dv.getUint16(off)!==0xFFE1){ // not APP1 - skip this marker segment
+        if(dv.getUint8(off)!==0xFF) return '';
+        off+=2+dv.getUint16(off+2); continue;
+      }
+      // APP1 (Exif)
+      var base=off+4;
+      if(dv.getUint32(base)!==0x45786966) return ''; // 'Exif'
+      var tiff=base+6;
+      var little=(dv.getUint16(tiff)===0x4949);
+      var g16=function(o){ return dv.getUint16(o,little); };
+      var g32=function(o){ return dv.getUint32(o,little); };
+      var ifd0=tiff+g32(tiff+4);
+      var n=g16(ifd0), exifIFD=0;
+      for(var i=0;i<n;i++){ var e=ifd0+2+i*12; if(g16(e)===0x8769){ exifIFD=tiff+g32(e+8); break; } }
+      if(!exifIFD) return '';
+      var m=g16(exifIFD);
+      for(var j=0;j<m;j++){
+        var en=exifIFD+2+j*12;
+        if(g16(en)===0x9003){ // DateTimeOriginal, ASCII "YYYY:MM:DD HH:MM:SS"
+          var cnt=g32(en+4), vo=(cnt>4)?(tiff+g32(en+8)):(en+8), s='';
+          for(var k=0;k<cnt-1;k++){ var ch=dv.getUint8(vo+k); if(ch) s+=String.fromCharCode(ch); }
+          var mo=s.match(/(\d{4}):(\d{2}):(\d{2})\s+(\d{2}):(\d{2})/);
+          if(mo) return mo[3]+'/'+mo[2]+'/'+mo[1]+' '+mo[4]+':'+mo[5];
+          return '';
+        }
+      }
+      return '';
+    }
+  }catch(e){ return ''; }
+  return '';
 }
 function pubCloseMedia(){ var ov=document.getElementById('pub-media-ov'); if(ov){ ov.style.display='none'; ov.innerHTML=''; } }
 window.pubViewMedia=pubViewMedia;
@@ -226,8 +296,23 @@ async function exportPublicData(){
              ca_no:m.ca_no||'', installation:m.installation||'', meter_no:m.meter_no||'',
              role:m.role||'main', parent_meter_id:m.parent_meter_id||'' };
   });
-  // bills: keep only fields the public report reads (no receipt/invoice/photo paths - those are
-  // private Drive files the public site cannot open anyway).
+  // meter lookup (for building the relative photo path per bill)
+  var _mById={}; (D.meters||[]).forEach(function(m){ _mById[m.id]=m; });
+  var _photoBase=(D.meta&&D.meta.meter_photo_base)?D.meta.meter_photo_base:'meter-photos';
+  function _meterNoFor(b){ if(b&&b.central_meter_no) return b.central_meter_no; var m=_mById[b.meter_id]; if(!m) return ''; return m.installation||m.meter_no||m.ca_no||''; }
+  function _catOf2(type){ var t=(type||'').toLowerCase(); if(t.indexOf('w')===0||t.indexOf('water')>=0||t.indexOf('\u0e19')>=0) return 'water'; return 'electricity'; }
+  function _relPhoto(b){
+    var period=b.period||''; if(!period) return '';
+    var meterNo=_meterNoFor(b); if(!meterNo) return '';
+    var type=b.utility_type||'electricity';
+    var year=(period.split('-')[0])||'', cat=_catOf2(type);
+    var idx=window.VM_PHOTO_INDEX;
+    if(idx){ var key=cat+'/'+year+'/'+meterNo+'_'+period; if(idx[key]&&idx[key].file){ return _photoBase.replace(/\/+$/,'')+'/'+idx[key].file; } }
+    try{ var t=U.meterPhotoTarget(type, period, [meterNo, period], 'jpg', _photoBase); return t.path; }catch(e){ return ''; }
+  }
+  // bills: keep only fields the public report reads (no receipt/invoice paths - those are private).
+  // meter_photo_rel = relative path inside the repo (meter-photos/<cat>/<year>/<meterNo>_<period>.jpg);
+  // the copy_photos_to_public.py script copies the actual files there so the public site can open them.
   var bills=(D.utility_bills||[]).map(function(b){
     return {
       id:b.id, meter_id:b.meter_id, period:b.period||'', utility_type:b.utility_type||'',
@@ -238,7 +323,8 @@ async function exportPublicData(){
       bill_total:b.bill_total||0, central_meter_no:b.central_meter_no||'',
       central_prev:b.central_prev||0, central_present:b.central_present||0, central_units:b.central_units||0,
       central_energy:b.central_energy||0, central_ft:b.central_ft||0, central_vat:b.central_vat||0,
-      central_amount:b.central_amount||0, home_units:b.home_units||0, home_amount:b.home_amount||0
+      central_amount:b.central_amount||0, home_units:b.home_units||0, home_amount:b.home_amount||0,
+      meter_photo_rel:_relPhoto(b)
     };
   });
   var payload={ generated_at:new Date().toISOString(), estate_name:(D.meta&&D.meta.estate_name)||'', meters:meters, utility_bills:bills };

@@ -331,12 +331,29 @@ async function markHomeOnlyBefore(){
   await renderBills();
   U.toast('\u0e15\u0e34\u0e4a\u0e01\u0e1a\u0e49\u0e32\u0e19\u0e25\u0e49\u0e27\u0e19 '+ticked+' + \u0e14\u0e36\u0e07\u0e40\u0e02\u0e49\u0e32\u0e43\u0e2b\u0e21\u0e48 '+imported+' \u0e07\u0e27\u0e14');
 }
+function _billMeterPhotoSrc(b, meters){
+  // Resolve the meter-photo path for a bill row (same index-first logic as the report).
+  if(!b) return '';
+  if(b.meter_photo_path) return b.meter_photo_path;
+  var period=b.period||''; if(!period) return '';
+  var m=(meters||[]).find(function(x){ return x.id===b.meter_id; });
+  var cmn=b.central_meter_no||'';
+  var meterNo=cmn||(m?(m.installation||m.meter_no||m.ca_no||''):''); if(!meterNo) return '';
+  var type=(m?m.utility_type:'')||b.utility_type||'electricity';
+  var cat=(function(tp){ var s=(tp||'').toLowerCase(); if(s.indexOf('w')===0||s.indexOf('water')>=0||s.indexOf('\u0e19')>=0) return 'water'; return 'electricity'; })(type);
+  var year=(String(period).split('-')[0])||'';
+  var base=(window.CM_DATA_META&&window.CM_DATA_META.meter_photo_base)||'meter-photos';
+  var idx=window.VM_PHOTO_INDEX;
+  if(idx){ var key=cat+'/'+year+'/'+meterNo+'_'+period; if(idx[key]&&idx[key].file){ return String(base).replace(/\/+$/,'')+'/'+idx[key].file; } }
+  try{ var t=U.meterPhotoTarget(type, period, [meterNo, period], 'jpg', base); return t.path; }catch(e){ return ''; }
+}
 async function renderBills(){
   const repo = window.CM_REPO;
   const D = await repo.all();
   const meters = D.meters || [];
   _billTariff = U.getTariff(D.meta);
   _billRates = U.getRates(D.meta);
+  window.CM_DATA_META = D.meta || {};
   const bills = _sortBills((D.utility_bills||[]), D.meters||[]);
   const body = document.getElementById('util-body');
   const today = U.todayISO();
@@ -352,7 +369,10 @@ async function renderBills(){
     const stStyle = _manualPaid ? 'style="background:var(--primary-bg);color:var(--primary)"'
                    : (!b.paid&&overdue)?'style="background:var(--error-bg);color:var(--error)"':'';
     const stTxt = b.paid?(_manualPaid?'Paid (manual)':'Paid'):overdue?'OVERDUE':'unpaid';
-    const recv = b.receipt_path?`<a href="#" onclick="(window.pubViewMedia?pubViewMedia(this.getAttribute('data-src'),event):window.open(this.getAttribute('data-src')));return false;" data-src="${U.esc(b.receipt_path)}" title="${U.esc(b.receipt_path)}"><i class="fa-solid fa-paperclip text-primary"></i></a>`:'<span class="text-muted">-</span>';
+    const _mphoto = _billMeterPhotoSrc(b, meters);
+    const _mphotoLink = _mphoto?`<a href="#" title="\u0e14\u0e39\u0e23\u0e39\u0e1b\u0e21\u0e34\u0e40\u0e15\u0e2d\u0e23\u0e4c" onclick="(window.pubViewMedia?pubViewMedia(this.getAttribute('data-src'),event):window.open(this.getAttribute('data-src')));return false;" data-src="${U.esc(_mphoto)}" style="margin-right:6px"><i class="fa-solid fa-camera text-primary"></i></a>`:'';
+    const _recvLink = b.receipt_path?`<a href="#" onclick="(window.pubViewMedia?pubViewMedia(this.getAttribute('data-src'),event):window.open(this.getAttribute('data-src')));return false;" data-src="${U.esc(b.receipt_path)}" title="${U.esc(b.receipt_path)}"><i class="fa-solid fa-paperclip text-primary"></i></a>`:'';
+    const recv = (_mphotoLink||_recvLink)?(_mphotoLink+_recvLink):'<span class="text-muted">-</span>';
     const splitBadge = b.split_meter ? ` <span class="tag" style="background:var(--primary-bg);color:var(--primary)" title="Split meter: central ${U.fmtMoney(b.central_amount||0)} of full bill ${U.fmtMoney(b.bill_total||0)}">split</span>` : '';
     const expBtn = b.split_meter ? `<button class="lnk-btn" title="Show central meter detail" onclick="toggleBillDetail('${b.id}')" style="margin-right:4px"><i class="fa-solid fa-chevron-right" id="bd-chev-${b.id}"></i></button>` : '';
     return `<tr>
@@ -1044,16 +1064,28 @@ async function _buildMeterPhotoPath(ext){
   const meterNo=centralNo||(m?(m.installation||m.meter_no||m.ca_no||''):'');
   const period=_billPeriodValue();
   const base=await _meterPhotoBase();
-  // Filename uses the PERIOD (not the shot date) so the app + organizer script + public
-  // report all agree on the name: <meterNo>_<period>.jpg  e.g. 9788192_2026-09.jpg
-  // (<=1 photo per meter per period, so no clash.)
+  // Prefer the REAL filename from the photo index (organize_meter_photos.py writes
+  // window.VM_PHOTO_INDEX, key '<cat>/<year>/<meterNo>_<period>'). The organizer may have
+  // appended the EXIF shot date (<meterNo>_<period>_<YYYY-MM-DD>.jpg), so look that up first.
+  var _cat=(function(tp){ var s=(tp||'').toLowerCase(); if(s.indexOf('w')===0||s.indexOf('water')>=0||s.indexOf('\u0e19')>=0) return 'water'; return 'electricity'; })(type);
+  var _year=(String(period).split('-')[0])||'';
+  var _idx=window.VM_PHOTO_INDEX;
+  if(_idx && meterNo && period){
+    var _key=_cat+'/'+_year+'/'+meterNo+'_'+period;
+    if(_idx[_key] && _idx[_key].file){ return { path:String(base).replace(/\/+$/,'')+'/'+_idx[_key].file, found:true }; }
+  }
+  // Not in the index -> fall back to the period-based name (file may not exist yet).
   const t=U.meterPhotoTarget(type, period, [meterNo, period], ext||'jpg', base);
-  return t.path;
+  return { path:t.path, found:false };
 }
 async function billSuggestMeterPhoto(){
-  var p=await _buildMeterPhotoPath('jpg');
-  document.getElementById('bl-meter_photo_path').value=p;
-  U.toast('Path suggested - save your photo there');
+  var r=await _buildMeterPhotoPath('jpg');
+  if(r && r.found){
+    document.getElementById('bl-meter_photo_path').value=r.path;
+    U.toast('\u0e40\u0e08\u0e2d\u0e23\u0e39\u0e1b\u0e21\u0e34\u0e40\u0e15\u0e2d\u0e23\u0e4c: '+r.path.split('/').pop());
+  } else {
+    U.toast('\u0e2b\u0e32\u0e23\u0e39\u0e1b\u0e21\u0e34\u0e40\u0e15\u0e2d\u0e23\u0e4c\u0e44\u0e21\u0e48\u0e40\u0e08\u0e2d (\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49\u0e16\u0e48\u0e32\u0e22/\u0e08\u0e31\u0e14\u0e40\u0e02\u0e49\u0e32\u0e42\u0e1f\u0e25\u0e40\u0e14\u0e2d\u0e23\u0e4c) \u2014 \u0e23\u0e31\u0e19 organize_meter_photos \u0e01\u0e48\u0e2d\u0e19');
+  }
 }
 
 function billCopyMeterPhoto(){

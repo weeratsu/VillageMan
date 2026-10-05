@@ -153,6 +153,97 @@ def unique_path(folder, base, ext):
         i += 1
 
 
+def _parse_existing(fn):
+    """Parse an already-filed photo name -> (meterNo, period, shotDate or '', ext).
+    Accepts <meterNo>_<YYYY-MM>.ext  or  <meterNo>_<YYYY-MM>_<YYYY-MM-DD>.ext
+    (optionally with a _2/_3 dedup suffix before the ext)."""
+    name, ext = os.path.splitext(fn)
+    ext = ext.lower()
+    if ext not in IMG_EXT:
+        return None
+    import re
+    m = re.match(r"^(.+?)_(\d{4}-\d{2})(?:_(\d{4}-\d{2}-\d{2}))?(?:_\d+)?$", name)
+    if not m:
+        return None
+    return m.group(1), m.group(2), (m.group(3) or ""), ext
+
+
+def rename_existing():
+    """Add the EXIF shot-date suffix to already-filed photos that lack it.
+    Only renames when EXIF DateTimeOriginal is readable; files without it stay as-is."""
+    renamed = 0
+    if not os.path.isdir(PHOTOS):
+        return 0
+    for cat in sorted(os.listdir(PHOTOS)):
+        catdir = os.path.join(PHOTOS, cat)
+        if not os.path.isdir(catdir) or cat == "inbox":
+            continue
+        for year in sorted(os.listdir(catdir)):
+            ydir = os.path.join(catdir, year)
+            if not os.path.isdir(ydir):
+                continue
+            for fn in sorted(os.listdir(ydir)):
+                full = os.path.join(ydir, fn)
+                if not os.path.isfile(full):
+                    continue
+                parsed = _parse_existing(fn)
+                if not parsed:
+                    continue
+                meter_no, period, shot, ext = parsed
+                if shot:
+                    continue  # already has a date
+                d = exif_date(full)
+                if not d:
+                    continue  # no EXIF -> leave unchanged (user decision)
+                base = "%s_%s_%s" % (meter_no, period, d.strftime("%Y-%m-%d"))
+                dest = unique_path(ydir, base, ".jpg" if ext in (".jpeg", ".jpg") else ext)
+                try:
+                    os.rename(full, dest)
+                    log("REN %s  ->  %s" % (fn, os.path.basename(dest)))
+                    renamed += 1
+                except Exception as e:
+                    log("ERR rename %s : %s" % (fn, e))
+    return renamed
+
+
+def build_index():
+    """Write meter-photos/index.json mapping '<cat>/<year>/<meterNo>_<period>' -> actual filename.
+    Lets the app + public report resolve the real file (which may carry a _<date> suffix)
+    without guessing. Latest shot date wins if duplicates exist for a period."""
+    index = {}
+    if not os.path.isdir(PHOTOS):
+        return 0
+    for cat in sorted(os.listdir(PHOTOS)):
+        catdir = os.path.join(PHOTOS, cat)
+        if not os.path.isdir(catdir) or cat == "inbox":
+            continue
+        for year in sorted(os.listdir(catdir)):
+            ydir = os.path.join(catdir, year)
+            if not os.path.isdir(ydir):
+                continue
+            for fn in sorted(os.listdir(ydir)):
+                if not os.path.isfile(os.path.join(ydir, fn)):
+                    continue
+                parsed = _parse_existing(fn)
+                if not parsed:
+                    continue
+                meter_no, period, shot, ext = parsed
+                key = "%s/%s/%s_%s" % (cat, year, meter_no, period)
+                prev = index.get(key)
+                # prefer the entry whose shot date is latest (dated beats undated)
+                if prev is None or (shot and shot > prev.get("shot", "")):
+                    index[key] = {"file": "%s/%s/%s" % (cat, year, fn), "shot": shot}
+    out = os.path.join(PHOTOS, "index.json")
+    with open(out, "w", encoding="utf-8") as f:
+        json.dump(index, f, ensure_ascii=False, indent=1)
+    # Also write a <script>-loadable version (file:// blocks fetch of .json, so the app loads this).
+    out_js = os.path.join(PHOTOS, "photo_index.js")
+    with open(out_js, "w", encoding="utf-8") as f:
+        f.write("window.VM_PHOTO_INDEX = " + json.dumps(index, ensure_ascii=False, indent=1) + ";\n")
+    log("index written: %d entries (index.json + photo_index.js)" % len(index))
+    return len(index)
+
+
 def main():
     if not os.path.isdir(INBOX):
         log("Inbox not found: %s" % INBOX)
@@ -177,10 +268,16 @@ def main():
             py_, pm_ = period_of(dt)
             dest_dir = os.path.join(PHOTOS, cat, str(py_))
             os.makedirs(dest_dir, exist_ok=True)
-            # Filename uses the PERIOD (YYYY-MM) so it matches the app's Suggest path and the
-            # public report's guessed path:  <meterNo>_<YYYY-MM>.jpg  (<=1 photo per period).
+            # Filename = <meterNo>_<period>[_<shotDate>].jpg
+            #   period   = YYYY-MM (billing period, always present) -> keeps path resolvable
+            #   shotDate = YYYY-MM-DD, appended ONLY when it came from EXIF (dsrc=="EXIF");
+            #              the viewer parses this to show "ถ่ายเมื่อ ...". If no EXIF, omit it
+            #              (file-mtime is not a reliable shot date, per user decision).
             period_str = "%04d-%02d" % (py_, pm_)
-            base = "%s_%s" % (meter_no, period_str)
+            if dsrc == "EXIF":
+                base = "%s_%s_%s" % (meter_no, period_str, dt.strftime("%Y-%m-%d"))
+            else:
+                base = "%s_%s" % (meter_no, period_str)
             dest = unique_path(dest_dir, base, ".jpg" if ext in (".jpeg", ".jpg") else ext)
             try:
                 shutil.move(src, dest)
@@ -191,8 +288,10 @@ def main():
             except Exception as e:
                 log("ERR %s -> %s : %s" % (src, dest, e))
                 skipped += 1
+    ren = rename_existing()
+    nidx = build_index()
     log("")
-    log("Done. moved=%d skipped=%d" % (moved, skipped))
+    log("Done. moved=%d skipped=%d renamed=%d index=%d" % (moved, skipped, ren, nidx))
     log("Tip: open the VillageMan Bills form, use the suggested path, or copy the")
     log("     printed path above into the bill's Meter photo path field.")
 

@@ -181,6 +181,14 @@ tr.bill-detail td{border-top:none}
     u.onerror=function(){ window.UTILITY_DATA=window.UTILITY_DATA||{bills:[]}; };
     document.head.appendChild(u);
   })();
+  // Load the meter-photo index (written by organize_meter_photos.py) so the report can resolve
+  // dated photo filenames (<meterNo>_<period>_<YYYY-MM-DD>.jpg). Optional: continue if missing.
+  (function(){
+    var pi=document.createElement('script');
+    pi.src='meter-photos/photo_index.js?t='+bust;
+    pi.onerror=function(){ window.VM_PHOTO_INDEX=window.VM_PHOTO_INDEX||null; };
+    document.head.appendChild(pi);
+  })();
   function loadNext(i){
     if(i >= files.length) return;
     var s = document.createElement('script');
