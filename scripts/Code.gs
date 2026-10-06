@@ -157,11 +157,41 @@ function _decode(v, key){
 function _fmts(rows){ return rows.map(function(r){ return r.map(function(v){ return (typeof v==='string')?'@':'General'; }); }); }
 function _safeParse(s, fallback){ try{ return JSON.parse(s); }catch(e){ return fallback; } }
 
+/* ---------- PUBLIC (VillageManPublic website) ----------
+   No token. Mirrors the app's exportPublicData() whitelist exactly: operational/metered data only.
+   NEVER add households, vendors, emergency_contacts, payments, fee_*, expenses, promptpay_id,
+   invoice_path / receipt_path / notes here - this endpoint is readable by anyone with the URL. */
+function _publicData(){
+  var meters=_readCollection('meters').map(function(m){
+    return { id:m.id, purpose:m.purpose||'', utility_type:m.utility_type||'', provider:m.provider||'',
+             ca_no:String(m.ca_no==null?'':m.ca_no), installation:String(m.installation==null?'':m.installation),
+             meter_no:String(m.meter_no==null?'':m.meter_no), role:m.role||'main', parent_meter_id:m.parent_meter_id||'' };
+  });
+  var N=function(v){ return Number(v)||0; };
+  var bills=_readCollection('utility_bills').map(function(b){
+    return {
+      id:b.id, meter_id:b.meter_id, period:b.period||'', utility_type:b.utility_type||'',
+      units_used:N(b.units_used), prev_reading:N(b.prev_reading), present_reading:N(b.present_reading),
+      energy_charge:N(b.energy_charge), vat:N(b.vat), total_amount:N(b.total_amount),
+      paid:(b.paid===true||b.paid==='true'), paid_date:b.paid_date||'', due_date:b.due_date||'',
+      split_meter:(b.split_meter===true||b.split_meter==='true'), home_only:(b.home_only===true||b.home_only==='true'),
+      bill_total:N(b.bill_total), central_meter_no:String(b.central_meter_no==null?'':b.central_meter_no),
+      central_prev:N(b.central_prev), central_present:N(b.central_present), central_units:N(b.central_units),
+      central_energy:N(b.central_energy), central_ft:N(b.central_ft), central_vat:N(b.central_vat),
+      central_amount:N(b.central_amount), home_units:N(b.home_units), home_amount:N(b.home_amount)
+    };
+  });
+  var meta=_readMeta();
+  return { generated_at:new Date().toISOString(), estate_name:meta.estate_name||'', meters:meters, utility_bills:bills };
+}
+
 /* ---------- HTTP ---------- */
 function doGet(e){
   try{
     var p=(e&&e.parameter)?e.parameter:{};
     if((p.action||'all')==='ping') return _json({ ok:true, now:new Date().toISOString() });
+    // PUBLIC: no token needed - returns ONLY whitelisted bill/meter fields (see _publicData).
+    if(p.action==='public') return _json({ ok:true, data:_publicData() });
     if(p.token!==READ_TOKEN && p.token!==WRITE_TOKEN) return _json({ ok:false, error:'bad token' });
     return _json({ ok:true, data:_readAll() });
   }catch(err){ return _json({ ok:false, error:String(err) }); }
