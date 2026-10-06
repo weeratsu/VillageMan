@@ -331,6 +331,27 @@ async function markHomeOnlyBefore(){
   await renderBills();
   U.toast('\u0e15\u0e34\u0e4a\u0e01\u0e1a\u0e49\u0e32\u0e19\u0e25\u0e49\u0e27\u0e19 '+ticked+' + \u0e14\u0e36\u0e07\u0e40\u0e02\u0e49\u0e32\u0e43\u0e2b\u0e21\u0e48 '+imported+' \u0e07\u0e27\u0e14');
 }
+function _utilLogArchiveDir(period, kind){
+  var pp=(period||'').split('-'); if(pp.length<2) return '';
+  var MN=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var mi=parseInt(pp[1],10)-1; if(mi<0||mi>11) return '';
+  var billsRoot=(kind==='water')?'Water Bills':'Electric Bills';
+  return '../../Documents/Bills/'+billsRoot+'/'+pp[0]+'/'+pp[1]+' - '+MN[mi]+'/';
+}
+function _utilLogPathsForBill(b, meters){
+  var out={invoice:(b&&b.invoice_path)||'', receipt:(b&&b.receipt_path)||''};
+  if(out.invoice && out.receipt) return out;
+  var m=(meters||[]).find(function(x){ return x.id===b.meter_id; });
+  var kind=_utilLogKind(m?m.utility_type:(b.utility_type||'electricity'));
+  var ca=(m && m.ca_no)?m.ca_no:(b.ca_no||'');
+  var lb=_findUtilLogBill(b.period||'', kind, ca);
+  if(lb){
+    var dir=_utilLogArchiveDir(b.period||'', kind);
+    if(!out.invoice){ out.invoice = lb.invoice_path || (lb.invoice_file?dir+lb.invoice_file:''); }
+    if(!out.receipt){ out.receipt = lb.receipt_path || (lb.receipt_file?dir+lb.receipt_file:''); }
+  }
+  return out;
+}
 function _billMeterPhotoSrc(b, meters){
   // Resolve the meter-photo path for a bill row (same index-first logic as the report).
   if(!b) return '';
@@ -370,9 +391,12 @@ async function renderBills(){
                    : (!b.paid&&overdue)?'style="background:var(--error-bg);color:var(--error)"':'';
     const stTxt = b.paid?(_manualPaid?'Paid (manual)':'Paid'):overdue?'OVERDUE':'unpaid';
     const _mphoto = _billMeterPhotoSrc(b, meters);
-    const _mphotoLink = _mphoto?`<a href="#" title="\u0e14\u0e39\u0e23\u0e39\u0e1b\u0e21\u0e34\u0e40\u0e15\u0e2d\u0e23\u0e4c" onclick="(window.pubViewMedia?pubViewMedia(this.getAttribute('data-src'),event):window.open(this.getAttribute('data-src')));return false;" data-src="${U.esc(_mphoto)}" style="margin-right:6px"><i class="fa-solid fa-camera text-primary"></i></a>`:'';
-    const _recvLink = b.receipt_path?`<a href="#" onclick="(window.pubViewMedia?pubViewMedia(this.getAttribute('data-src'),event):window.open(this.getAttribute('data-src')));return false;" data-src="${U.esc(b.receipt_path)}" title="${U.esc(b.receipt_path)}"><i class="fa-solid fa-paperclip text-primary"></i></a>`:'';
-    const recv = (_mphotoLink||_recvLink)?(_mphotoLink+_recvLink):'<span class="text-muted">-</span>';
+    const _docs = _utilLogPathsForBill(b, meters);
+    const _mediaLink = (src, icon, tip) => src?`<a href="#" title="${U.esc(tip)}" onclick="(window.pubViewMedia?pubViewMedia(this.getAttribute('data-src'),event):window.open(this.getAttribute('data-src')));return false;" data-src="${U.esc(src)}" style="margin-right:7px"><i class="fa-solid ${icon} text-primary"></i></a>`:'';
+    const _invLink = _mediaLink(_docs.invoice, 'fa-file-invoice', '\u0e43\u0e1a\u0e41\u0e08\u0e49\u0e07\u0e2b\u0e19\u0e35\u0e49 (Invoice)');
+    const _recvLink = _mediaLink(_docs.receipt, 'fa-receipt', '\u0e43\u0e1a\u0e40\u0e2a\u0e23\u0e47\u0e08 (Receipt)');
+    const _photoLink = _mediaLink(_mphoto, 'fa-camera', '\u0e14\u0e39\u0e23\u0e39\u0e1b\u0e21\u0e34\u0e40\u0e15\u0e2d\u0e23\u0e4c (Meter photo)');
+    const recv = (_photoLink+_invLink+_recvLink) || '<span class="text-muted">-</span>';
     const splitBadge = b.split_meter ? ` <span class="tag" style="background:var(--primary-bg);color:var(--primary)" title="Split meter: central ${U.fmtMoney(b.central_amount||0)} of full bill ${U.fmtMoney(b.bill_total||0)}">split</span>` : '';
     const expBtn = b.split_meter ? `<button class="lnk-btn" title="Show central meter detail" onclick="toggleBillDetail('${b.id}')" style="margin-right:4px"><i class="fa-solid fa-chevron-right" id="bd-chev-${b.id}"></i></button>` : '';
     return `<tr>
@@ -389,6 +413,7 @@ async function renderBills(){
         ${!b.paid ? `<button class="del-btn" title="\u0e17\u0e33\u0e40\u0e04\u0e23\u0e37\u0e48\u0e2d\u0e07\u0e2b\u0e21\u0e32\u0e22\u0e08\u0e48\u0e32\u0e22\u0e40\u0e2d\u0e07 (Mark paid)" onclick="markBillPaidManual('${b.id}')"><i class="fa-solid fa-money-bill-wave" style="color:var(--primary)"></i></button>` : ''}
         ${b.paid ? `<button class="del-btn" title="\u0e22\u0e01\u0e40\u0e25\u0e34\u0e01\u0e01\u0e32\u0e23\u0e08\u0e48\u0e32\u0e22 (Mark unpaid)" onclick="markBillUnpaid('${b.id}')"><i class="fa-solid fa-rotate-left" style="color:var(--text3)"></i></button>` : ''}
         ${b.paid && b.paid_manual ? `<button class="del-btn" title="\u0e40\u0e0a\u0e47\u0e04 receipt \u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e01\u0e32\u0e23\u0e08\u0e48\u0e32\u0e22 (Check receipt)" onclick="checkBillReceipt('${b.id}')"><i class="fa-solid fa-receipt" style="color:var(--primary)"></i></button>` : ''}
+        <button class="del-btn" title="\u0e2d\u0e31\u0e1e\u0e40\u0e14\u0e17 receipt path \u0e08\u0e32\u0e01 UtilityLog (Update receipt)" onclick="updateReceiptPath('${b.id}')"><i class="fa-solid fa-file-arrow-down" style="color:var(--primary)"></i></button>
         <button class="del-btn" title="Edit" onclick="editBill('${b.id}')"><i class="fa-solid fa-pen"></i></button>
         <button class="del-btn" title="Delete" onclick="deleteBill('${b.id}')"><i class="fa-solid fa-trash"></i></button>
       </td>
@@ -560,13 +585,14 @@ async function renderBills(){
     </div>
 
     </div>
+    <div id="bl-newbanner"></div>
     <div class="card">
       <h2><i class="fa-solid fa-list"></i> Utility Bills</h2>
       <div class="flex gap-2 flex-wrap" style="align-items:center;margin-bottom:8px;font-size:11px">
         <span class="text-muted"><i class="fa-solid fa-link-slash"></i> Pre-piggyback bills:</span>
         <span class="text-muted">Piggyback starts</span>
         <select class="inp" id="bl-pivot-period" style="max-width:120px;font-size:11px">${_periodOptsForBills(bills)}</select>
-        <button class="btn btn-ghost" style="font-size:11px;padding:3px 8px" onclick="markHomeOnlyBefore()" title="Mark all bills before the selected period as home-only (excluded from the common-area report)"><i class="fa-solid fa-check-double"></i> Mark earlier as home-only</button>
+<button class="btn btn-ghost" style="font-size:11px;padding:3px 8px" onclick="markHomeOnlyBefore()" title="Mark all bills before the selected period as home-only (excluded from the common-area report)"><i class="fa-solid fa-check-double"></i> Mark earlier as home-only</button> <button class="btn btn-ghost" style="font-size:11px;padding:3px 8px" onclick="syncAllFromUtilityLog()" title="Refresh deadline, paid date and invoice/receipt paths of ALL bills from UtilityLog"><i class="fa-solid fa-file-arrow-down"></i> Sync all from UtilityLog</button>
       </div>
       ${bills.length?`<table class="tbl"><thead><tr><th style="cursor:pointer" onclick="setBillSort('meter')">Meter${_billSortArrow('meter')}</th><th style="cursor:pointer" onclick="setBillSort('period')">Period${_billSortArrow('period')}</th><th class="r" style="cursor:pointer" onclick="setBillSort('units')">Units${_billSortArrow('units')}</th><th class="r" style="cursor:pointer" onclick="setBillSort('total')">Total${_billSortArrow('total')}</th><th style="cursor:pointer" onclick="setBillSort('deadline')">Deadline${_billSortArrow('deadline')}</th><th style="cursor:pointer" onclick="setBillSort('status')">Status${_billSortArrow('status')}</th><th class="r">Slip</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
                     :`<p class="text-muted" style="padding:8px">No bills yet.</p>`}
@@ -575,6 +601,8 @@ async function renderBills(){
   // Form starts HIDDEN and empty. The user clicks "+ Add Bill" (billShowAddForm) to open a
   // fresh form, or Edit on a row (which opens the form via editBill). No auto-fill on load.
   if(typeof _setBillSaveBtn==='function'){ try{ _setBillSaveBtn(); }catch(e){} }
+  try{ await _autoUpdateFromUL(); }catch(e){ console.error('auto-update from UL:',e); }
+  try{ _renderNewBillBanner(D); }catch(e){ console.error('new-bill banner:',e); }
 }
 
 /* When a meter is picked: show its fixed info + carry previous reading from its most recent bill. */
@@ -642,7 +670,7 @@ function _utilLogKind(utilityType){ return (utilityType==='water') ? 'water' : '
 /* Find the UtilityLog bill for a given period + kind (electric/water). */
 function _findUtilLogBill(period, kind, ca){
   var bills=_utilLogBills();
-  ca=(ca||'').replace(/^0+/,'');  // normalize leading zeros for comparison
+  ca=String(ca==null?'':ca).replace(/^0+/,'');  // normalize leading zeros; CA may come back from Sheets as a NUMBER
   // 1st pass: match CA + period + kind (precise, supports multiple meters/accounts)
   if(ca){
     for(var i=0;i<bills.length;i++){
@@ -656,7 +684,7 @@ function _findUtilLogBill(period, kind, ca){
 }
 /* Latest UtilityLog period (YYYY-MM) that has a bill for this kind (+CA if given). */
 function _latestUtilLogPeriod(kind, ca){
-  var bills=_utilLogBills(); ca=(ca||'').replace(/^0+/,'');
+  var bills=_utilLogBills(); ca=String(ca==null?'':ca).replace(/^0+/,'');
   var best='';
   for(var i=0;i<bills.length;i++){
     var b=bills[i]; if((b.utility||'')!==kind) continue;
@@ -732,9 +760,13 @@ async function _fillFromUtilityLog(silent){
     var monthFolder=pp[1]+' - '+MN[mi];
     var dir='../../Documents/Bills/'+billsRoot+'/'+pp[0]+'/'+monthFolder+'/';
     var ip=document.getElementById('bl-invoice_path');
-    if(ip && b.invoice_file){ ip.value=dir+b.invoice_file; }
     var rp=document.getElementById('bl-receipt_path');
-    if(rp && b.receipt_file){ rp.value=dir+b.receipt_file; }
+    // Prefer the REAL archived path the parser now records (b.invoice_path / b.receipt_path);
+    // fall back to reconstructing <dir>+<filename> for older logs that only stored the filename.
+    // Keep invoice and receipt STRICTLY separate - never let one fall back to the other's file,
+    // or the receipt link would open the invoice (and vice-versa).
+    if(ip){ if(b.invoice_path) ip.value=b.invoice_path; else if(b.invoice_file) ip.value=dir+b.invoice_file; else ip.value=''; }
+    if(rp){ if(b.receipt_path) rp.value=b.receipt_path; else if(b.receipt_file) rp.value=dir+b.receipt_file; else rp.value=''; }
   })();
   var _ca=(b.ca_no?(' \u00b7 CA '+b.ca_no):'');
   if(note){ note.innerHTML='<i class="fa-solid fa-circle-check"></i> UtilityLog: '+kind+' '+period+_ca+' \u2014 '+U.fmtNum(units)+' \u0e2b\u0e19\u0e48\u0e27\u0e22 / '+U.fmtMoney(total)+(b.paid?' (\u0e08\u0e48\u0e32\u0e22\u0e41\u0e25\u0e49\u0e27)':''); note.className='text-success'; }
@@ -1231,6 +1263,17 @@ async function saveBill(){
     rec.meter_no=m.meter_no; rec.reference_no=m.reference_no;
   }
   const editId=document.getElementById('bl-edit-id').value;
+  // GUARD: Add mode must not create a 2nd bill for the same meter + period (+ same split/home-only kind).
+  if(!editId){
+    const dup=(D.utility_bills||[]).find(x=>x.meter_id===rec.meter_id && x.period===rec.period && !!x.split_meter===!!rec.split_meter);
+    if(dup){
+      if(confirm('\u0e07\u0e27\u0e14 '+rec.period+' \u0e21\u0e35\u0e1a\u0e34\u0e25\u0e19\u0e35\u0e49\u0e2d\u0e22\u0e39\u0e48\u0e41\u0e25\u0e49\u0e27 \u2014 \u0e01\u0e14 OK \u0e40\u0e1e\u0e37\u0e48\u0e2d\u0e40\u0e02\u0e35\u0e22\u0e19\u0e17\u0e31\u0e1a\u0e1a\u0e34\u0e25\u0e40\u0e14\u0e34\u0e21, Cancel \u0e40\u0e1e\u0e37\u0e48\u0e2d\u0e22\u0e01\u0e40\u0e25\u0e34\u0e01')){
+        await repo.update('utility_bills', dup.id, rec); U.toast('Bill updated (replaced '+rec.period+')');
+        clearBillForm(); await renderBills();
+      }
+      return;
+    }
+  }
   if(editId){ await repo.update('utility_bills', editId, rec); U.toast('Bill updated'); }
   else { await repo.add('utility_bills', rec); U.toast('Bill added'); }
   // clear the edit state FIRST (so renderBills seeds a fresh form), then re-render the list from updated data
@@ -1261,13 +1304,50 @@ async function checkBillReceipt(id){
   var kind=_utilLogKind(m?m.utility_type:(b.utility_type||'electricity'));
   var ca=(m && m.ca_no)?m.ca_no:(b.ca_no||'');
   var lb=_findUtilLogBill(b.period||'', kind, ca);
+  // Also refresh the payment deadline from the PDF-parsed log (fixes deadlines corrupted by the date bug).
+  var patch={};
+  if(lb && lb.due_date) patch.due_date=lb.due_date;
   if(lb && lb.paid){
-    await window.CM_REPO.update('utility_bills', id, {paid:true, paid_manual:false, paid_date:(lb.paid_date||b.paid_date||U.todayISO())});
-    U.toast('\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e01\u0e32\u0e23\u0e08\u0e48\u0e32\u0e22\u0e08\u0e32\u0e01 receipt \u0e41\u0e25\u0e49\u0e27');
+    patch.paid=true; patch.paid_manual=false; patch.paid_date=(lb.paid_date||b.paid_date||U.todayISO());
+  }
+  if(Object.keys(patch).length){
+    await window.CM_REPO.update('utility_bills', id, patch);
+    U.toast(lb.paid ? '\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e01\u0e32\u0e23\u0e08\u0e48\u0e32\u0e22\u0e08\u0e32\u0e01 receipt \u0e41\u0e25\u0e49\u0e27 + deadline' : 'Deadline updated from UtilityLog');
     renderBills();
   } else {
     U.toast('\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e1e\u0e1a receipt \u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e43\u0e19 UtilityLog (\u0e23\u0e31\u0e19 parser \u0e2b\u0e25\u0e31\u0e07\u0e44\u0e14\u0e49 receipt)');
   }
+}
+
+/* Update a bill's invoice_path/receipt_path from the matching UtilityLog record, without
+   opening the edit form. Use when a receipt arrives after the bill was already recorded. */
+async function updateReceiptPath(id){
+  var b=await window.CM_REPO.get('utility_bills', id); if(!b) return;
+  var D=await window.CM_REPO.all();
+  var paths=_utilLogPathsForBill(b, D.meters||[]);
+  var patch={}, got=[];
+  if(paths.invoice && paths.invoice!==b.invoice_path){ patch.invoice_path=paths.invoice; got.push('invoice'); }
+  if(paths.receipt && paths.receipt!==b.receipt_path){ patch.receipt_path=paths.receipt; got.push('receipt'); }
+  // Also refresh deadline + paid date from the PDF-parsed log (repairs date-bug corruption).
+  (function(){
+    var m=(D.meters||[]).find(function(x){return x.id===b.meter_id;});
+    var kind=_utilLogKind(m?m.utility_type:(b.utility_type||'electricity'));
+    var lb=_findUtilLogBill(b.period||'', kind, (m && m.ca_no)?m.ca_no:(b.ca_no||''));
+    if(!lb) return;
+    if(lb.due_date && lb.due_date!==b.due_date){ patch.due_date=lb.due_date; got.push('deadline'); }
+    // Receipt confirmed in UtilityLog -> mark PAID + fill paid date (works for unpaid bills too).
+    if(lb.paid && (!b.paid || b.paid_manual || (lb.paid_date && lb.paid_date!==b.paid_date))){
+      patch.paid=true; patch.paid_manual=false; patch.paid_date=lb.paid_date||b.paid_date||U.todayISO(); got.push('paid');
+    }
+  })();
+  if(!Object.keys(patch).length){
+    if(paths.invoice||paths.receipt){ U.toast('\u0e21\u0e35 path \u0e25\u0e48\u0e32\u0e2a\u0e38\u0e14\u0e2d\u0e22\u0e39\u0e48\u0e41\u0e25\u0e49\u0e27 (\u0e44\u0e21\u0e48\u0e21\u0e35\u0e01\u0e32\u0e23\u0e40\u0e1b\u0e25\u0e35\u0e48\u0e22\u0e19\u0e41\u0e1b\u0e25\u0e07)'); }
+    else { U.toast('\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e1e\u0e1a invoice/receipt \u0e43\u0e19 UtilityLog \u0e2a\u0e33\u0e2b\u0e23\u0e31\u0e1a\u0e07\u0e27\u0e14\u0e19\u0e35\u0e49 (\u0e23\u0e31\u0e19 parser \u0e01\u0e48\u0e2d\u0e19)'); }
+    return;
+  }
+  await window.CM_REPO.update('utility_bills', id, patch);
+  U.toast('\u0e2d\u0e31\u0e1e\u0e40\u0e14\u0e17 '+got.join(' + ')+' path \u0e41\u0e25\u0e49\u0e27');
+  renderBills();
 }
 async function editBill(id){
   const b=await window.CM_REPO.get('utility_bills', id);
@@ -1394,5 +1474,152 @@ window.billShowAddForm = billShowAddForm;
 window.markBillUnpaid = markBillUnpaid;
 window.markBillPaidManual = markBillPaidManual;
 window.checkBillReceipt = checkBillReceipt;
+window.updateReceiptPath = updateReceiptPath;
 window.deleteBill = deleteBill;
 window.clearBillForm = clearBillForm;
+
+/* Bulk version of updateReceiptPath: refresh due_date, paid_date (and paid status if
+   receipt-confirmed) plus invoice/receipt paths for EVERY bill from UtilityLog, then
+   save ONCE. Never touches split / home-only / central readings / photo / notes. */
+async function syncAllFromUtilityLog(){
+  var D=await window.CM_REPO.all();
+  var bills=D.utility_bills||[], meters=D.meters||[];
+  var changed=0, notFound=0, fixedPeriod=[], mismatch=[], clearedDue=[];
+  bills.forEach(function(b){
+    var m=meters.find(function(x){return x.id===b.meter_id;});
+    var kind=_utilLogKind(m?m.utility_type:(b.utility_type||'electricity'));
+    var ca=(m && m.ca_no)?m.ca_no:(b.ca_no||'');
+    var lb=_findUtilLogBill(b.period||'', kind, ca);
+    // GUARD: the period may be wrong (date-bug truncation, e.g. 2026-09 stored as 2026-08).
+    // If units/total don't match the UL bill for that period, look for the UL bill whose
+    // units AND amount match exactly, and correct the period from it.
+    var bu=Number(b.units_used)||0, bt=b.split_meter?(Number(b.bill_total)||0):(Number(b.total_amount)||0);  // split: bill_total = full MEA bill
+    var sameBill=function(x){ return x && Number(x.units)===bu && (!bt || Math.abs((Number(x.amount)||0)-bt)<0.01); };
+    if(bu && lb && !sameBill(lb)){
+      var caN=String(ca==null?'':ca).replace(/^0+/,'');
+      var hit=_utilLogBills().filter(function(x){
+        return (x.utility||'')===kind && sameBill(x) && (!caN || !x.ca_no || String(x.ca_no).replace(/^0+/,'')===caN);
+      });
+      var dup=hit.length===1 && bills.some(function(o){ return o!==b && o.meter_id===b.meter_id && !!o.split_meter===!!b.split_meter && o.period===hit[0].period; });
+      if(hit.length===1 && !dup){ fixedPeriod.push(b.period+' \u2192 '+hit[0].period); b.period=hit[0].period; lb=hit[0]; }
+      else { mismatch.push(b.period+' ('+bu+' units)'); return; }   // ambiguous: leave untouched
+    }
+    if(!lb){ notFound++; return; }
+    var before=JSON.stringify([b.period,b.due_date,b.paid,b.paid_date,b.invoice_path,b.receipt_path]);
+    if(lb.due_date) b.due_date=lb.due_date;
+    else if(b.due_date){
+      // UL has no deadline for this period (older PDFs). A real deadline falls within
+      // 0-3 months after the period month; anything else is date-bug corruption -> clear it.
+      var pm=/^(\d{4})-(\d{2})$/.exec(b.period||''), dm=/^(\d{4})-(\d{2})/.exec(b.due_date);
+      if(pm && dm){
+        var gap=(Number(dm[1])*12+Number(dm[2]))-(Number(pm[1])*12+Number(pm[2]));
+        if(gap<0 || gap>3){ b.due_date=''; clearedDue.push(b.period); }
+      }
+    }
+    if(lb.paid){ b.paid=true; b.paid_manual=false; if(lb.paid_date) b.paid_date=lb.paid_date; }
+    // UtilityLog is the source of truth for file paths: rebuild from the log only (ignore the
+    // bill's stored paths, which may be stale/wrong) and overwrite when the log has a file.
+    var paths=_utilLogPathsForBill({period:b.period, meter_id:b.meter_id, utility_type:b.utility_type, ca_no:b.ca_no}, meters);
+    // UtilityLog is the source of truth: if the log has no file for this period, the stored path is stale -> clear it.
+    b.invoice_path=paths.invoice||'';
+    b.receipt_path=paths.receipt||'';
+    if(JSON.stringify([b.period,b.due_date,b.paid,b.paid_date,b.invoice_path,b.receipt_path])!==before) changed++;
+  });
+  var extra=(fixedPeriod.length?('\nPeriod corrected (units+amount match): '+fixedPeriod.join(', ')):'')
+           +(clearedDue.length?('\nWrong deadline cleared (no deadline in UtilityLog): '+clearedDue.join(', ')):'')
+           +(mismatch.length?('\nSkipped - units do not match UtilityLog: '+mismatch.join(', ')):'')
+           +(notFound?('\n'+notFound+' bill(s) not found in UtilityLog - left unchanged'):'');
+  if(!changed){ U.toast('All bills already match UtilityLog'); if(extra) alert(extra.trim()); return; }
+  if(!confirm('Update '+changed+' bill(s) from UtilityLog?'+extra)){ return; }
+  await window.CM_REPO.replaceAll(D);
+  U.toast('Synced '+changed+' bill(s) from UtilityLog');
+  renderBills();
+}
+window.syncAllFromUtilityLog = syncAllFromUtilityLog;
+window.deleteBill = deleteBill;
+window.clearBillForm = clearBillForm;
+
+/* ===== Auto from UtilityLog (Oct 2026) =====
+   (A) Quiet status refresh, once per page load: for bills that ALREADY exist, copy deadline,
+       receipt-confirmed paid + paid date, and invoice/receipt paths from UtilityLog. Only touches
+       those fields (never units/amounts/split/central/photo/notes) and only bills whose units match
+       the UL bill for that period. Manual-paid bills without a UL receipt are left alone.
+   (B) New-bill banner: lists UL periods that have no VM bill yet for each main meter, each with a
+       one-click button that opens Add Bill pre-filled from UL (user adds central meter + Save). */
+var _ulAutoDone=false;
+function _ulMainMeters(D){ return (D.meters||[]).filter(function(m){ return (m.role||'main')!=='sub'; }); }
+async function _autoUpdateFromUL(){
+  if(_ulAutoDone) return; _ulAutoDone=true;
+  if(!_utilLogBills().length) return;
+  var D=await window.CM_REPO.all();
+  var meters=D.meters||[], n=0;
+  (D.utility_bills||[]).forEach(function(b){
+    var m=meters.find(function(x){return x.id===b.meter_id;});
+    var kind=_utilLogKind(m?m.utility_type:(b.utility_type||'electricity'));
+    var lb=_findUtilLogBill(b.period||'', kind, (m&&m.ca_no)?m.ca_no:(b.ca_no||''));
+    if(!lb) return;
+    var bu=Number(b.units_used)||0;
+    if(bu && Number(lb.units)!==bu) return;                 // different bill -> don't touch
+    var before=JSON.stringify([b.due_date,b.paid,b.paid_manual,b.paid_date,b.invoice_path,b.receipt_path]);
+    if(lb.due_date) b.due_date=lb.due_date;
+    if(lb.paid){ b.paid=true; b.paid_manual=false; if(lb.paid_date) b.paid_date=lb.paid_date; }
+    var paths=_utilLogPathsForBill({period:b.period, meter_id:b.meter_id, utility_type:b.utility_type, ca_no:b.ca_no}, meters);
+    if(paths.invoice) b.invoice_path=paths.invoice;
+    if(paths.receipt) b.receipt_path=paths.receipt;
+    if(JSON.stringify([b.due_date,b.paid,b.paid_manual,b.paid_date,b.invoice_path,b.receipt_path])!==before) n++;
+  });
+  if(n){
+    await window.CM_REPO.replaceAll(D);
+    U.toast('Updated '+n+' bill(s) from UtilityLog');
+    await renderBills();
+  }
+}
+/* UL periods (newer than the meter's latest VM bill) with no VM bill yet, per main meter. */
+function _ulNewPeriods(D){
+  var out=[], bills=D.utility_bills||[];
+  _ulMainMeters(D).forEach(function(m){
+    var kind=_utilLogKind(m.utility_type);
+    var ca=String(m.ca_no==null?'':m.ca_no).replace(/^0+/,'');
+    var mine=bills.filter(function(b){return b.meter_id===m.id;});
+    var have={}; mine.forEach(function(b){ have[b.period||'']=1; });
+    var latest=mine.reduce(function(a,b){ return (b.period||'')>a?(b.period||''):a; },'');
+    _utilLogBills().forEach(function(lb){
+      if((lb.utility||'')!==kind) return;
+      var bca=String(lb.ca_no==null?'':lb.ca_no).replace(/^0+/,'');
+      if(ca && bca && bca!==ca) return;
+      var p=lb.period||''; if(!/^\d{4}-\d{2}$/.test(p) || have[p]) return;
+      if(latest && p<=latest) return;                     // only NEWER than what VM already has
+      have[p]=1;
+      out.push({meterId:m.id, label:(m.purpose||m.utility_type||'meter'), kind:kind, period:p, amount:Number(lb.amount)||0, units:Number(lb.units)||0});
+    });
+  });
+  return out.sort(function(a,b){ return a.period.localeCompare(b.period); });
+}
+function _renderNewBillBanner(D){
+  var el=document.getElementById('bl-newbanner'); if(!el) return;
+  var list=_ulNewPeriods(D);
+  if(!list.length){ el.innerHTML=''; return; }
+  var items=list.map(function(j){
+    var icon=j.kind==='water'?'\ud83d\udca7':'\u26a1';
+    return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:4px 0">'
+      +'<span>'+icon+' <b>'+U.esc(j.label)+'</b> \u00b7 '+j.period+' \u00b7 '+j.units+' units \u00b7 '+U.fmtMoney(j.amount)+'</span>'
+      +'<button class="btn btn-primary" style="font-size:10px;padding:3px 9px" onclick="billAddFromUL(\''+j.meterId+'\',\''+j.period+'\')"><i class="fa-solid fa-plus"></i> Add this bill</button></div>';
+  }).join('');
+  el.innerHTML='<div class="card" style="border-left:3px solid var(--primary)">'
+    +'<h2><i class="fa-solid fa-bell"></i> New bill'+(list.length>1?'s':'')+' from UtilityLog ('+list.length+')</h2>'
+    +'<p class="text-muted" style="font-size:10px;margin-bottom:4px">Opens Add Bill pre-filled from UtilityLog. For split bills, fill the central meter reading, date and photo, then Save.</p>'
+    +items+'</div>';
+}
+/* One click: open Add Bill for this meter + period, filled from UtilityLog (same pipeline as manual Add Bill). */
+async function billAddFromUL(meterId, period){
+  billShowAddForm();
+  var sel=document.getElementById('bl-meter_id'); if(sel) sel.value=meterId;
+  if(typeof meterPicked==='function'){ await meterPicked(); }
+  _setBillPeriod(period);
+  await _carryPrevReadings();
+  await _fillFromUtilityLog(false);
+  if(typeof billRecalcTotal==='function'){ try{ billRecalcTotal(); }catch(e){} }
+  if(typeof billRecalcSplit==='function'){ try{ billRecalcSplit(); }catch(e){} }
+  var w=document.getElementById('bl-form-wrap'); if(w && w.scrollIntoView){ try{ w.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){} }
+}
+window.billAddFromUL = billAddFromUL;

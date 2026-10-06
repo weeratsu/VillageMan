@@ -301,7 +301,7 @@ async function addExpense(){
 async function delExpense(id){ await window.CM_REPO.remove('expenses', id); F.toast('Expense deleted'); renderExpenses(); }
 
 /* ============================ REPORTS ============================ */
-async let _utilRptYear = new Date().getFullYear();
+let _utilRptYear = new Date().getFullYear();
 let _utilRptType = 'electricity';
 function setUtilRptYear(y){ _utilRptYear=parseInt(y,10)||new Date().getFullYear(); renderReports(); }
 function setUtilRptType(t){ _utilRptType=t; renderReports(); }
@@ -349,7 +349,7 @@ function _utilYearReport(bills, type, year){
   var note = anySplit? '<p class="text-muted" style="font-size:10px;padding:2px 0">* This meter type has split (piggybacked) bills. \u201cCentral\u201d = common-area expense recorded; \u201cHome\u201d = resident share (reference).</p>' : '';
   return summary + '<table class="tbl">'+head+'<tbody>'+rows+totalRow+'</tbody></table>' + note;
 }
-function renderReports(){
+async function renderReports(){
   const D = await window.CM_REPO.all();
   const body = document.getElementById('fin-body');
   const income = D.payments.reduce((s,p)=>s+(Number(p.paid_amount)||0),0);

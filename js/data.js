@@ -43,6 +43,23 @@ function emptyData(){ return defaultData(); }
 function migrate(d){
   const base = defaultData();
   if(!d || typeof d !== 'object') return base;
+  // Repair bills whose receipt_path wrongly holds an invoice file (from the pre-split auto-fill,
+  // which fell back to the invoice when no receipt existed). Symptom: clicking the receipt link
+  // opened the invoice, and Edit showed both path fields pointing at the invoice. Fix: if
+  // receipt_path looks like an invoice ([Invoice] in the name), move it to invoice_path when that's
+  // empty, then clear receipt_path so it no longer masquerades as a receipt.
+  var _ub = Array.isArray(d.utility_bills) ? d.utility_bills : [];
+  _ub.forEach(function(b){
+    if(!b || typeof b!=='object') return;
+    var rp=b.receipt_path||'', ip=b.invoice_path||'';
+    var rpIsInvoice=/\[Invoice\]/i.test(rp);
+    if(rpIsInvoice){
+      if(!ip) b.invoice_path=rp;      // recover the invoice path if we don't already have it
+      b.receipt_path='';              // stop the invoice masquerading as the receipt
+    }
+    // Also un-duplicate the exact-same-path case (both fields identical = both the invoice).
+    if(b.receipt_path && b.invoice_path && b.receipt_path===b.invoice_path){ b.receipt_path=''; }
+  });
   return {
     meta: Object.assign(base.meta, d.meta || {}),
     households: Array.isArray(d.households) ? d.households : [],

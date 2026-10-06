@@ -170,7 +170,7 @@ tr.bill-detail td{border-top:none}
    token every page load, so edits always show even under file:// (where ?v= is
    often ignored and the browser caches JS hard). No more manual version bumping. */
 (function(){
-  var files = ['data','util','repo','promptpay','ui-dashboard','ui-households',
+  var files = ['data','util','config-sheet','repo','repo-sheet','promptpay','ui-dashboard','ui-households',
                'ui-finance','ui-utilities','ui-pubreport','ui-vendors','ui-emergency','app'];
   var bust = Date.now();               // unique per load -> always bypasses cache
   // Load the shared UtilityLog data (home MEA/MWA bills) from CashMan's data folder first,
