@@ -1,0 +1,3 @@
+# Private: Google Sheet tokens + Sheet ID - NEVER push to the public GitHub repo
+js/config-sheet.js
+scripts/Code.gs
