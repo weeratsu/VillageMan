@@ -425,7 +425,7 @@ async function renderBills(){
     : '';
 
   body.innerHTML = `
-    <div style="margin-bottom:10px"><button class="btn btn-primary" id="bl-addbtn" onclick="billShowAddForm()"><i class="fa-solid fa-plus"></i> Add Bill</button></div><div id="bl-form-wrap" style="display:none"><div class="card">
+    <div style="margin-bottom:10px"><button class="btn btn-primary" id="bl-addbtn" onclick="billShowAddForm()"><i class="fa-solid fa-plus"></i> Add Bill</button> <button class="btn btn-ghost" id="bl-refresh" onclick="vmRefreshBills()" title="Reload new bills from UtilityLog + latest data from the Google Sheet"><i class="fa-solid fa-rotate-right"></i> Refresh</button></div><div id="bl-form-wrap" style="display:none"><div class="card">
       <h2><i class="fa-solid fa-file-invoice-dollar"></i> Record Monthly Bill</h2>
       ${meters.length ? `
       <!-- ===== MEA-style electricity bill entry ===== -->
@@ -436,7 +436,7 @@ async function renderBills(){
           <select class="inp" id="bl-meter_id" onchange="meterPicked()">${meterOptions}</select>
           <span id="bl-meterinfo" class="text-muted" style="font-size:10px"></span>
           <button type="button" class="btn btn-ghost" style="margin-left:8px;font-size:11px;padding:3px 8px" onclick="_fillFromUtilityLog(false)" title="\u0e14\u0e36\u0e07\u0e2b\u0e19\u0e48\u0e27\u0e22/\u0e22\u0e2d\u0e14\u0e1a\u0e34\u0e25\u0e21\u0e34\u0e40\u0e15\u0e2d\u0e23\u0e4c\u0e2b\u0e25\u0e31\u0e01\u0e08\u0e32\u0e01 UtilityLog \u0e15\u0e32\u0e21\u0e07\u0e27\u0e14\u0e17\u0e35\u0e48\u0e40\u0e25\u0e37\u0e2d\u0e01"><i class="fa-solid fa-file-import"></i> \u0e14\u0e36\u0e07\u0e08\u0e32\u0e01 UtilityLog</button>
-          <button type="button" class="btn btn-ghost" style="margin-left:4px;font-size:11px;padding:3px 8px" onclick="importAllFromUtilityLog()" title="\u0e2a\u0e23\u0e49\u0e32\u0e07\u0e1a\u0e34\u0e25\u0e17\u0e38\u0e01\u0e07\u0e27\u0e14\u0e43\u0e19 UtilityLog \u0e17\u0e35\u0e48\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e43\u0e19 VillageMan \u0e23\u0e27\u0e14\u0e40\u0e14\u0e35\u0e22\u0e27"><i class="fa-solid fa-layer-group"></i> \u0e14\u0e36\u0e07\u0e1a\u0e34\u0e25\u0e43\u0e2b\u0e21\u0e48\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14</button>
+
           <div id="bl-utilnote" class="text-muted" style="font-size:10px;margin-top:3px"></div>
         </div>
 
@@ -1623,3 +1623,29 @@ async function billAddFromUL(meterId, period){
   var w=document.getElementById('bl-form-wrap'); if(w && w.scrollIntoView){ try{ w.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){} }
 }
 window.billAddFromUL = billAddFromUL;
+
+/* Refresh (Oct 2026): no F5 needed when run_utility.bat wrote new bills while VM was open.
+   1) reload ../CashMan/data/utility_log.js (cache-busted <script>) -> window.UTILITY_DATA
+   2) ask the Sheet repo for its latest data (pull, or push pending edits first)
+   3) re-run the auto status update + new-bill banner by re-rendering Bills. */
+function _vmReloadUL(){
+  return new Promise(function(resolve){
+    var before=(window.UTILITY_DATA&&window.UTILITY_DATA.generated_at)||'';
+    var old=document.getElementById('vm-ul-reload'); if(old&&old.parentNode) old.parentNode.removeChild(old);
+    var sc=document.createElement('script'); sc.id='vm-ul-reload';
+    sc.src='../CashMan/data/utility_log.js?t='+Date.now();
+    sc.onload=function(){ var after=(window.UTILITY_DATA&&window.UTILITY_DATA.generated_at)||''; resolve({ok:true,changed:after!==before,at:after}); };
+    sc.onerror=function(){ resolve({ok:false}); };
+    document.head.appendChild(sc);
+  });
+}
+async function vmRefreshBills(){
+  var btn=document.getElementById('bl-refresh'); if(btn){ btn.disabled=true; btn.innerHTML='<i class="fa-solid fa-rotate-right fa-spin"></i> Refreshing\u2026'; }
+  var r=await _vmReloadUL();
+  try{ if(window.CM_REPO && typeof window.CM_REPO.syncNow==='function') window.CM_REPO.syncNow(); }catch(e){ console.error('syncNow:',e); }
+  _ulAutoDone=false;                       // allow the auto status update to run again
+  try{ await renderBills(); }catch(e){ console.error('refresh render:',e); }
+  if(!r.ok) U.toast('\u26a0 Could not reload utility_log.js');
+  else U.toast(r.changed ? ('\u2705 New UtilityLog data ('+String(r.at).replace('T',' ').slice(0,16)+')') : 'UtilityLog already up to date');
+}
+window.vmRefreshBills=vmRefreshBills;

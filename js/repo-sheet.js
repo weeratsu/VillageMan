@@ -72,7 +72,7 @@
       }catch(e){}
     }
 
-    function GoogleSheetRepo(){ this._d = null; this._pushTimer = null; this._pushing = null; }
+    function GoogleSheetRepo(){ this._d = null; this._pushTimer = null; this._pushing = null; this._gen = 0; }
 
     GoogleSheetRepo.prototype._get = function(action){
       var tk = encodeURIComponent(cfg.readToken || cfg.writeToken);
@@ -90,10 +90,11 @@
     GoogleSheetRepo.prototype._pull = function(){
       var self = this;
       if(_isDirty()){ self._schedulePush(0); return; }   // push local edits first
+      var genAtStart = self._gen;   // RACE GUARD: discard a pull that started before a local edit
       _status('\u21bb syncing\u2026');
       self._get('all').then(function(res){
         if(!res || !res.ok) throw new Error((res && res.error) || 'load failed');
-        if(_isDirty()) return;   // user edited while we were fetching - keep local
+        if(_isDirty() || self._gen !== genAtStart) return;   // edited since fetch began - keep local
         var remote = migrate(_fixDates(res.data || {}));
         var changed = JSON.stringify(remote) !== JSON.stringify(self._d);
         if(changed){ self._d = remote; _writeCache(remote); _rerender(); }
