@@ -12,6 +12,8 @@
 (function(){
   try {
     var cfg = window.CM_SHEET_CFG;
+    // GitHub Pages / phone: no config-sheet.js -> use the connection saved in THIS browser by connect.html
+    if(!cfg || !cfg.endpoint){ try{ cfg = JSON.parse(localStorage.getItem('vm_sheet_cfg')||'null'); }catch(e){ cfg = null; } if(cfg) window.CM_SHEET_CFG = cfg; }
     if(!cfg || !cfg.endpoint || cfg.endpoint.indexOf('http')!==0){ return; }
     var CM_DATA = window.CM_DATA || {};
     var SKEY = CM_DATA.SKEY || 'community_manager_v1';   // same key as LocalRepo -> shared cache

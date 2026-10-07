@@ -195,6 +195,7 @@ tr.bill-detail td{border-top:none}
     s.src = 'js/' + files[i] + '.js?t=' + bust;
     s.onload = function(){ loadNext(i+1); };
     s.onerror = function(){
+      if(files[i]==='config-sheet'){ loadNext(i+1); return; }   // optional (not on GitHub Pages) -> repo-sheet uses browser-saved connection
       document.body.insertAdjacentHTML('afterbegin',
         '<div style="background:#b91c1c;color:#fff;padding:10px;font:13px sans-serif">'
         + 'Failed to load js/' + files[i] + '.js — check the file exists.</div>');
