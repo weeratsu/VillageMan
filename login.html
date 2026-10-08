@@ -1,0 +1,50 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Login - VillageMan & CashMan</title>
+<style>body{font:16px system-ui,"Segoe UI",Tahoma,sans-serif;max-width:420px;margin:40px auto;padding:0 16px;color:#1f2937}
+.card{border:1px solid #e2e8f0;border-radius:12px;padding:18px;margin:14px 0}
+input{width:100%;box-sizing:border-box;padding:12px;border:1px solid #cbd5e1;border-radius:8px;font-size:16px}
+button{width:100%;padding:12px;border-radius:8px;border:0;background:#2563eb;color:#fff;font-size:16px;margin-top:10px;cursor:pointer}
+button.sec{background:#fff;color:#334155;border:1px solid #cbd5e1}.ok{color:#15803d}.bad{color:#b91c1c}
+a.app{display:block;text-align:center;padding:12px;border:1px solid #cbd5e1;border-radius:8px;margin-top:8px;text-decoration:none;color:#1e3a8a;font-weight:600}</style></head><body>
+<h2>🔐 Login</h2>
+<div style="color:#64748b;font-size:14px">ใช้ password เดียวกันทั้ง VillageMan และ CashMan</div>
+<div class="card" id="box"></div>
+<script>
+var APPS=[{name:'VillageMan',key:'vm_sheet_cfg',endpoint:'https://script.google.com/macros/s/AKfycbyvisOSzAf_9VZJFhdKgqo0rKuazq0T33XhDb0x3HJSEoB2uE8z07irgxsUB_DeRMYN/exec',url:'../VillageMan/index.html'},
+          {name:'CashMan',key:'cm_sheet_cfg',endpoint:'https://script.google.com/macros/s/AKfycbzx_ZUG_kxger7LnFnmV-kCUJUkcGv0lQgH6yi1Ssz2SoFJcPxIpUiPJr_qPFUf6xf3/exec',url:'../CashMan/index.html'}];
+function cfg(a){ try{ return JSON.parse(localStorage.getItem(a.key)||'null'); }catch(e){ return null; } }
+function post(a,body){ return fetch(a.endpoint,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)}).then(function(r){return r.json();}); }
+function links(){ return APPS.map(function(a){ return '<a class="app" href="'+a.url+'">เปิด '+a.name+' →</a>'; }).join(''); }
+function render(msg){
+  var done=APPS.filter(function(a){ var c=cfg(a); return c&&c.writeToken; });
+  var b=document.getElementById('box');
+  if(done.length===APPS.length){
+    b.innerHTML='<div class="ok"><b>✅ Login แล้วใน browser นี้</b></div>'+links()+'<button class="sec" onclick="logout()">Logout (browser นี้)</button>';
+  } else {
+    b.innerHTML='<input id="pw" type="password" placeholder="Password" autocomplete="current-password" autofocus>'
+      +'<button id="go" onclick="login()">Login</button><div id="msg" style="margin-top:10px;font-size:14px"></div>';
+    document.getElementById('pw').onkeydown=function(e){ if(e.key==='Enter') login(); };
+  }
+  if(msg){ var m=document.getElementById('msg'); if(m) m.innerHTML=msg; }
+}
+function login(){
+  var pw=document.getElementById('pw').value; if(!pw) return;
+  var go=document.getElementById('go'); go.disabled=true; go.textContent='กำลังตรวจสอบ… (ครั้งแรกอาจ 20–40 วินาที)';
+  // VillageMan first: a wrong password then never reaches CashMan (one lock-out counter used)
+  post(APPS[0],{action:'login',password:pw}).then(function(r0){
+    if(!r0||!r0.ok) throw new Error((r0&&r0.error)||'login failed');
+    localStorage.setItem(APPS[0].key,JSON.stringify({endpoint:APPS[0].endpoint,writeToken:r0.session,readToken:r0.session}));
+    return post(APPS[1],{action:'login',password:pw});
+  }).then(function(r1){
+    if(!r1||!r1.ok) throw new Error('CashMan: '+((r1&&r1.error)||'login failed'));
+    localStorage.setItem(APPS[1].key,JSON.stringify({endpoint:APPS[1].endpoint,writeToken:r1.session,readToken:r1.session}));
+    render();
+  }).catch(function(e){ render('<span class="bad">❌ '+String(e.message||e)+'</span>'); });
+}
+function logout(){
+  if(!confirm('Logout ทั้ง VillageMan และ CashMan ใน browser นี้?')) return;
+  APPS.forEach(function(a){ var c=cfg(a); if(c&&c.writeToken){ post(a,{action:'logout',token:c.writeToken}).catch(function(){}); } localStorage.removeItem(a.key); });
+  render('<span class="ok">Logout แล้ว</span>');
+}
+render();
+</script></body></html>

@@ -14,6 +14,14 @@
     var cfg = window.CM_SHEET_CFG;
     // GitHub Pages / phone: no config-sheet.js -> use the connection saved in THIS browser by connect.html
     if(!cfg || !cfg.endpoint){ try{ cfg = JSON.parse(localStorage.getItem('vm_sheet_cfg')||'null'); }catch(e){ cfg = null; } if(cfg) window.CM_SHEET_CFG = cfg; }
+
+  // Not logged in on the web (GitHub Pages / phone): show a small Login link. Local PC (file://) is unaffected.
+  try{ if((!window.CM_SHEET_CFG||!window.CM_SHEET_CFG.endpoint) && /^https?:$/.test(location.protocol)){
+    var _addLogin=function(){ if(document.getElementById('vm-login-bar')) return; var a=document.createElement('a'); a.id='vm-login-bar'; a.href='login.html';
+      a.textContent='🔐 Login เพื่อดึงข้อมูลจริงจาก Google Sheet'; a.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99999;background:#2563eb;color:#fff;text-align:center;padding:10px;font:14px system-ui,sans-serif;text-decoration:none';
+      (document.body||document.documentElement).appendChild(a); };
+    if(document.body) _addLogin(); else window.addEventListener('DOMContentLoaded',_addLogin);
+  } }catch(e){}
     if(!cfg || !cfg.endpoint || cfg.endpoint.indexOf('http')!==0){ return; }
     var CM_DATA = window.CM_DATA || {};
     var SKEY = CM_DATA.SKEY || 'community_manager_v1';   // same key as LocalRepo -> shared cache
