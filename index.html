@@ -194,7 +194,7 @@ tr.bill-detail td{border-top:none}
    often ignored and the browser caches JS hard). No more manual version bumping. */
 (function(){
   var files = ['data','util','config-sheet','repo','repo-sheet','promptpay','ui-dashboard','ui-households',
-               'ui-finance','ui-utilities','ui-pubreport','drive-view','ui-vendors','ui-emergency','app'];
+               'ui-finance','ui-utilities','ui-pubreport','drive-view','ui-vendors','ui-emergency','app','pull-refresh'];
   var bust = Date.now();               // unique per load -> always bypasses cache
   // Load the shared UtilityLog data (home MEA/MWA bills) from CashMan's data folder first,
   // so window.UTILITY_DATA is available for the Bills auto-fill. Optional: continue if missing.

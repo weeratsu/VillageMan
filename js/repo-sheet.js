@@ -87,18 +87,30 @@
       }catch(e){}
     }
 
+
+    // Robust call (Oct 8 2026): retry Google cold-start / HTML error pages up to 3x before giving up.
+    function __call(url,opt,tries,onWait){
+      tries=tries||3;
+      return fetch(url,opt).then(function(r){ return r.text(); }).then(function(t){
+        try{ return JSON.parse(t); }catch(e){ throw new Error('Google ยังไม่ตอบ (หน้า error)'); }
+      }).catch(function(e){
+        if(tries<=1) throw e;
+        if(onWait) onWait();
+        return new Promise(function(res){ setTimeout(res, tries===3?2500:6000); }).then(function(){ return __call(url,opt,tries-1,onWait); });
+      });
+    }
     function GoogleSheetRepo(){ this._d = null; this._pushTimer = null; this._pushing = null; this._gen = 0; }
 
     GoogleSheetRepo.prototype._get = function(action){
       var tk = encodeURIComponent(cfg.readToken || cfg.writeToken);
       var url = cfg.endpoint + '?action=' + encodeURIComponent(action) + '&token=' + tk + '&t=' + Date.now();
-      return fetch(url, { method:'GET' }).then(function(r){ return r.json(); });
+      return __call(url, { method:'GET' }, 3, function(){ _status('\u21bb กำลังปลุก Google\u2026'); });
     };
     GoogleSheetRepo.prototype._post = function(payload){
       payload.token = cfg.writeToken;
-      return fetch(cfg.endpoint, {
+      return __call(cfg.endpoint, {
         method:'POST', headers:{ 'Content-Type':'text/plain;charset=utf-8' }, body: JSON.stringify(payload)
-      }).then(function(r){ return r.json(); });
+      }, 3, function(){ _status('\u21bb กำลังปลุก Google\u2026'); });
     };
 
     /* Background pull from the Sheet. Skipped if local has unpushed edits. */
@@ -118,7 +130,7 @@
         _status('\u2713 synced', 'var(--success,#2a7)');
       }).catch(function(err){
         console.warn('Sheet pull failed:', err);
-        _status('\u26a0 offline (local data)', 'var(--danger,#c33)');
+        _status('\u26a0 offline: '+String((err&&err.message)||err).slice(0,80), 'var(--danger,#c33)');
       });
     };
 
@@ -169,7 +181,7 @@
         _status('\u2713 synced', 'var(--success,#2a7)');
       }).catch(function(err){
         console.warn('Sheet push failed (kept locally, will retry):', err);
-        _status('\u26a0 not saved to Sheet yet - will retry', 'var(--danger,#c33)');
+        _status('\u26a0 not saved: '+String((err&&err.message)||err).slice(0,80), 'var(--danger,#c33)');
         self._schedulePush(30000);
       }).then(function(){ self._pushing = null; });
     };
