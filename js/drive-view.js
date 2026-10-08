@@ -28,9 +28,16 @@
     o.style.display='flex';
   }
   function msg(t){ return '<div style="margin:auto;color:#fff;background:#333;padding:16px 18px;border-radius:10px;font:14px system-ui,sans-serif;max-width:90%;text-align:center">'+t+'</div>'; }
-  function show(id){
-    ov('<iframe src="https://drive.google.com/file/d/'+encodeURIComponent(id)+'/preview" style="flex:1;width:100%;border:0;background:#fff;border-radius:8px" allow="autoplay"></iframe>'
-      +'<div style="text-align:center;margin-top:6px"><a href="https://drive.google.com/file/d/'+encodeURIComponent(id)+'/view" target="_blank" rel="noopener" style="color:#fff;font-size:12px">เปิดใน Google Drive</a></div>');
+  function show(j){
+    var bin=atob(j.b64), n=bin.length, u8=new Uint8Array(n); for(var i=0;i<n;i++) u8[i]=bin.charCodeAt(i);
+    var url=URL.createObjectURL(new Blob([u8],{type:j.mime||'application/octet-stream'}));
+    var isImg=/^image\//.test(j.mime||''), isPdf=/pdf/.test(j.mime||'');
+    var view=isImg?'<div style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center"><img src="'+url+'" style="max-width:100%;max-height:100%;border-radius:8px"></div>'
+      :(isPdf?'<iframe src="'+url+'" style="flex:1;width:100%;border:0;background:#fff;border-radius:8px"></iframe>'
+      :msg('ไฟล์ชนิดนี้แสดงในหน้าไม่ได้ — กด "เปิดไฟล์" ด้านล่าง'));
+    ov(view+'<div style="text-align:center;margin-top:6px;display:flex;gap:18px;justify-content:center">'
+      +'<a href="'+url+'" target="_blank" rel="noopener" download="'+String(j.name||'file').replace(/"/g,'')+'" style="color:#fff;font-size:13px">เปิดไฟล์ / เต็มจอ</a>'
+      +'<a href="https://drive.google.com/file/d/'+encodeURIComponent(j.id)+'/view" target="_blank" rel="noopener" style="color:#cbd5e1;font-size:13px">เปิดใน Google Drive</a></div>');
   }
   window.pubViewMedia=function(src, ev){
     var p=localPath(src), c=cfg();
@@ -38,10 +45,10 @@
     if(ev){ if(ev.preventDefault) ev.preventDefault(); if(ev.stopPropagation) ev.stopPropagation(); }
     if(!c){ ov(msg('🔐 Login ก่อน แล้วจะเปิดไฟล์จาก Google Drive ได้<br><br><a href="login.html" style="color:#93c5fd">ไปหน้า Login</a>')); return false; }
     if(memo[p]){ show(memo[p]); return false; }
-    ov(msg('↻ กำลังหาไฟล์ใน Google Drive…'));
-    fetch(c.endpoint+'?action=file&'+'token='+encodeURIComponent(c.readToken||c.writeToken)+'&path='+encodeURIComponent(p)+'&t='+Date.now())
+    ov(msg('↻ กำลังโหลดไฟล์จาก Google Drive… (ครั้งแรกอาจ 5–40 วินาที)'));
+    fetch(c.endpoint+'?action=filedata&'+'token='+encodeURIComponent(c.readToken||c.writeToken)+'&path='+encodeURIComponent(p)+'&t='+Date.now())
       .then(function(r){ return r.json(); })
-      .then(function(j){ if(j&&j.ok&&j.id){ memo[p]=j.id; show(j.id); } else ov(msg('❌ '+((j&&j.error)||'not found'))); })
+      .then(function(j){ if(j&&j.ok&&j.b64){ memo[p]=j; show(j); } else ov(msg('❌ '+((j&&j.error)||'not found')+((j&&j.id)?'<br><br><a href="https://drive.google.com/file/d/'+encodeURIComponent(j.id)+'/view" target="_blank" style="color:#93c5fd">เปิดใน Google Drive</a>':''))); })
       .catch(function(e){ ov(msg('❌ ต่อ Google ไม่ได้: '+e)); });
     return false;
   };
