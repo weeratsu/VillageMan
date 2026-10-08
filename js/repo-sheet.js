@@ -72,6 +72,11 @@
     function _isDirty(){ try{ return localStorage.getItem(DIRTY_KEY)==='1'; }catch(e){ return false; } }
     function _setDirty(v){ try{ v ? localStorage.setItem(DIRTY_KEY,'1') : localStorage.removeItem(DIRTY_KEY); }catch(e){} }
 
+    // REAL-DATA GUARD (Oct 8 2026, same as CashMan): empty/default data must never reach the Sheet.
+    var _COLS=['households','fee_types','fee_charges','payments','expenses','meters','utility_bills','vendors','emergency_contacts'];
+    function _rows(d){ var n=0; if(!d) return 0; _COLS.forEach(function(c){ if(Array.isArray(d[c])) n+=d[c].length; }); return n; }
+    function _isReal(d){ return _rows(d)>=3; }
+
     function _rerender(){
       try{
         var tab = (location.hash||'').replace('#','') || 'dashboard';
@@ -99,13 +104,15 @@
     /* Background pull from the Sheet. Skipped if local has unpushed edits. */
     GoogleSheetRepo.prototype._pull = function(){
       var self = this;
-      if(_isDirty()){ self._schedulePush(0); return; }   // push local edits first
+      if(_isDirty() && _isReal(self._d)){ self._schedulePush(0); return; }   // push local edits first (only if local is real data)
+      if(_isDirty() && !_isReal(self._d)) _setDirty(false);              // empty local edits are never worth keeping over the Sheet
       var genAtStart = self._gen;   // RACE GUARD: discard a pull that started before a local edit
       _status('\u21bb syncing\u2026');
       self._get('all').then(function(res){
         if(!res || !res.ok) throw new Error((res && res.error) || 'load failed');
         if(_isDirty() || self._gen !== genAtStart) return;   // edited since fetch began - keep local
         var remote = migrate(_fixDates(res.data || {}));
+        if(!_isReal(remote) && _isReal(self._d)){ self._gen++; _setDirty(true); self._schedulePush(0); _status('\u2191 restoring Sheet from local\u2026'); return; }  // Sheet empty/broken -> repair from local
         var changed = JSON.stringify(remote) !== JSON.stringify(self._d);
         if(changed){ self._d = remote; _writeCache(remote); _rerender(); }
         _status('\u2713 synced', 'var(--success,#2a7)');
@@ -152,6 +159,7 @@
     GoogleSheetRepo.prototype._doPush = function(){
       var self = this;
       if(self._pushing){ self._schedulePush(800); return; }  // one push at a time
+      if(!_isReal(self._d)){ console.warn('VillageMan: local data looks empty - NOT sent to Sheet'); _status('\u26a0 local data empty - not sent','var(--danger,#c33)'); return; }
       _status('\u2191 saving to Sheet\u2026');
       var snapshot = JSON.stringify(self._d);
       self._pushing = self._post({ action:'replaceAll', data: JSON.parse(snapshot) }).then(function(res){
