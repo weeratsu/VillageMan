@@ -61,7 +61,7 @@ function _usageTrendCard(bills, type, title, icon){
   return '<div class="card"><h2><i class="fa-solid '+icon+'"></i> '+title+'</h2>'
     +'<div style="font-size:11px;color:var(--text3);margin-bottom:4px">\u0e2b\u0e19\u0e48\u0e27\u0e22\u0e01\u0e32\u0e23\u0e43\u0e0a\u0e49\u0e23\u0e32\u0e22\u0e40\u0e14\u0e37\u0e2d\u0e19 12 \u0e40\u0e14\u0e37\u0e2d\u0e19\u0e25\u0e48\u0e32\u0e2a\u0e38\u0e14</div>'+svg
     +'<div style="font-size:11px;color:var(--text3);margin:8px 0 4px">\u0e40\u0e1b\u0e23\u0e35\u0e22\u0e1a\u0e40\u0e17\u0e35\u0e22\u0e1a YoY \u0e40\u0e14\u0e37\u0e2d\u0e19\u0e40\u0e14\u0e35\u0e22\u0e27\u0e01\u0e31\u0e19\u0e1b\u0e35\u0e01\u0e48\u0e2d\u0e19</div>'
-    +'<table class="tbl"><thead><tr><th>\u0e40\u0e14\u0e37\u0e2d\u0e19</th><th class="r">\u0e1b\u0e35\u0e19\u0e35\u0e49</th><th class="r">\u0e1b\u0e35\u0e01\u0e48\u0e2d\u0e19</th><th class="r">YoY</th></tr></thead><tbody>'+yoy+'</tbody></table></div>';
+    +'<table class="tbl" style="width:100%;display:table;white-space:normal"><thead><tr><th>\u0e40\u0e14\u0e37\u0e2d\u0e19</th><th class="r">\u0e1b\u0e35\u0e19\u0e35\u0e49</th><th class="r">\u0e1b\u0e35\u0e01\u0e48\u0e2d\u0e19</th><th class="r">YoY</th></tr></thead><tbody>'+yoy+'</tbody></table></div>';
 }
 /* Common-area (central) COST per month across electricity+water, excluding home_only bills.
    split bill -> central_amount ; flat non-home_only bill -> total_amount (dedicated common meter). */
