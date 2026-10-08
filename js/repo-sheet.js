@@ -99,6 +99,15 @@
         return new Promise(function(res){ setTimeout(res, tries===3?2500:6000); }).then(function(){ return __call(url,opt,tries-1,onWait); });
       });
     }
+
+  // Bad session (Oct 8 2026): iPhone Home-Screen apps keep their OWN storage (separate from Safari), so an old
+  // session survives a password change -> 'bad token'. Clear the stale web session and show a Login bar.
+  function __badToken(key){
+    try{ var c=JSON.parse(localStorage.getItem(key)||'null'); if(!c||String(c.writeToken||'').indexOf('ses_')!==0) return; localStorage.removeItem(key); }catch(e){ return; }
+    try{ if(document.getElementById('relogin-bar')) return; var a=document.createElement('a'); a.id='relogin-bar'; a.href='login.html';
+      a.textContent='🔐 Session หมดอายุ — แตะเพื่อ Login ใหม่'; a.style.cssText='position:fixed;left:0;right:0;top:0;z-index:100001;background:#dc2626;color:#fff;text-align:center;padding:12px;padding-top:calc(12px + env(safe-area-inset-top));font:600 14px system-ui,sans-serif;text-decoration:none';
+      document.body.appendChild(a); }catch(e){}
+  }
     function GoogleSheetRepo(){ this._d = null; this._pushTimer = null; this._pushing = null; this._gen = 0; }
 
     GoogleSheetRepo.prototype._get = function(action){
@@ -130,7 +139,7 @@
         _status('\u2713 synced', 'var(--success,#2a7)');
       }).catch(function(err){
         console.warn('Sheet pull failed:', err);
-        _status('\u26a0 offline: '+String((err&&err.message)||err).slice(0,80), 'var(--danger,#c33)');
+        if(/bad token/.test(String((err&&err.message)||err))) __badToken('vm_sheet_cfg'); _status('\u26a0 offline: '+String((err&&err.message)||err).slice(0,80), 'var(--danger,#c33)');
       });
     };
 
@@ -181,7 +190,7 @@
         _status('\u2713 synced', 'var(--success,#2a7)');
       }).catch(function(err){
         console.warn('Sheet push failed (kept locally, will retry):', err);
-        _status('\u26a0 not saved: '+String((err&&err.message)||err).slice(0,80), 'var(--danger,#c33)');
+        if(/bad token/.test(String((err&&err.message)||err))) __badToken('vm_sheet_cfg'); _status('\u26a0 not saved: '+String((err&&err.message)||err).slice(0,80), 'var(--danger,#c33)');
         self._schedulePush(30000);
       }).then(function(){ self._pushing = null; });
     };
