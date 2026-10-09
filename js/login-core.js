@@ -1,5 +1,5 @@
-/* Hub/shared/login.js (Oct 9 2026) - ONE login for VillageMan, CashMan, ChangChi.
-   Each app has a thin login.html that loads this file (../Hub/shared/login.js), so the page stays inside
+/* WRHub/shared/login.js (Oct 9 2026) - ONE login for VillageMan, CashMan, ChangChi.
+   Each app has a thin login.html that loads this file (../WRHub/shared/login.js), so the page stays inside
    the app (important for iPhone Home-Screen apps). Edit login behaviour HERE only. */
 (function(){
  var st=document.createElement("style"); st.textContent="body{font:16px system-ui,\"Segoe UI\",Tahoma,sans-serif;max-width:420px;margin:40px auto;padding:0 16px;color:#1f2937}\n.card{border:1px solid #e2e8f0;border-radius:12px;padding:18px;margin:14px 0}\ninput{width:100%;box-sizing:border-box;padding:12px;border:1px solid #cbd5e1;border-radius:8px;font-size:16px}\nbutton{width:100%;padding:12px;border-radius:8px;border:0;background:#2563eb;color:#fff;font-size:16px;margin-top:10px;cursor:pointer}\nbutton.sec{background:#fff;color:#334155;border:1px solid #cbd5e1}.ok{color:#15803d}.bad{color:#b91c1c}\na.app{display:block;text-align:center;padding:12px;border:1px solid #cbd5e1;border-radius:8px;margin-top:8px;text-decoration:none;color:#1e3a8a;font-weight:600}"; document.head.appendChild(st);
@@ -21,18 +21,29 @@ function render(msg){
   if(done.length===live.length){
     b.innerHTML='<div class="ok"><b>✅ Login แล้วใน browser นี้</b></div>'+links()+'<button class="sec" onclick="logout()">Logout (browser นี้)</button>';
   } else {
-    b.innerHTML='<input id="pw" type="password" placeholder="Password" autocomplete="current-password" autofocus>'
-      +'<button id="go" onclick="login()">Login</button><div id="msg" style="margin-top:10px;font-size:14px"></div>';
-    document.getElementById('pw').onkeydown=function(e){ if(e.key==='Enter') login(); };
+    // Real <form> + hidden username so iPhone Keychain / Chrome / Edge OFFER TO SAVE the password (Oct 9 2026).
+    // The password is kept by the browser's own password manager (encrypted, Face ID), never by this app.
+    b.innerHTML='<form id="lf" method="post" action="#" autocomplete="on">'
+      +'<input id="un" name="username" type="text" autocomplete="username" value="weerat" style="position:absolute;left:-9999px;width:1px;height:1px" tabindex="-1" aria-hidden="true">'
+      +'<input id="pw" name="password" type="password" placeholder="Password" autocomplete="current-password" autofocus>'
+      +'<button id="go" type="submit">Login</button>'
+      +'<div style="font-size:12px;color:#64748b;margin-top:8px">💡 ครั้งแรก กด <b>บันทึกรหัสผ่าน</b> ตอน browser ถาม — ครั้งต่อไปแตะช่อง Password แล้วเลือกรหัสที่จำไว้ได้เลย</div>'
+      +'</form><div id="msg" style="margin-top:10px;font-size:14px"></div>';
+    document.getElementById('lf').onsubmit=function(e){ e.preventDefault(); login(); return false; };
   }
   if(msg){ var m=document.getElementById('msg'); if(m) m.innerHTML=msg; }
+}
+function __savePw(pw){
+  // Chrome/Edge: explicitly hand the credential to the browser's password manager (iPhone saves from the form submit).
+  try{ if(window.PasswordCredential && navigator.credentials && navigator.credentials.store){
+    navigator.credentials.store(new PasswordCredential({id:'weerat',password:pw,name:'VillageMan · CashMan · ChangChi'})); } }catch(e){}
 }
 function login(){
   var pw=document.getElementById('pw').value; if(!pw) return;
   var go=document.getElementById('go'); go.disabled=true; go.textContent='กำลังตรวจสอบ… (ครั้งแรกอาจ 20–40 วินาที)';
   var apps=APPS.filter(function(a){ return a.endpoint.indexOf('https://')===0; }), i=0, warn=[];
   function next(){
-    if(i>=apps.length){ render(warn.length?'<span class="bad">⚠️ '+warn.join('<br>')+'</span>':''); return; }
+    if(i>=apps.length){ __savePw(pw); render(warn.length?'<span class="bad">⚠️ '+warn.join('<br>')+'</span>':''); return; }
     var a=apps[i++];
     post(a,{action:'login',password:pw}).then(function(r){
       if(!r||!r.ok) throw new Error((r&&r.error)||'login failed');
