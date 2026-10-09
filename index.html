@@ -194,7 +194,8 @@ tr.bill-detail td{border-top:none}
    often ignored and the browser caches JS hard). No more manual version bumping. */
 (function(){
   var files = ['data','util','config-sheet','repo','repo-sheet','promptpay','ui-dashboard','ui-households',
-               'ui-finance','ui-utilities','ui-pubreport','drive-view','ui-vendors','ui-emergency','app','pull-refresh','table-fit'];
+               'ui-finance','ui-utilities','ui-pubreport','drive-view','ui-vendors','ui-emergency','app'];
+  var shared = ['pull-refresh','table-fit'];   // Hub/shared first, own js/ copy as fallback
   var bust = Date.now();               // unique per load -> always bypasses cache
   // Load the shared UtilityLog data (home MEA/MWA bills) from CashMan's data folder first,
   // so window.UTILITY_DATA is available for the Bills auto-fill. Optional: continue if missing.
@@ -212,8 +213,15 @@ tr.bill-detail td{border-top:none}
     pi.onerror=function(){ window.VM_PHOTO_INDEX=window.VM_PHOTO_INDEX||null; };
     document.head.appendChild(pi);
   })();
+  function loadShared(j){
+    if(j >= shared.length) return;
+    var s=document.createElement('script'); s.src='../Hub/shared/'+shared[j]+'.js?t='+bust;
+    s.onload=function(){ loadShared(j+1); };
+    s.onerror=function(){ var f=document.createElement('script'); f.src='js/'+shared[j]+'.js?t='+bust; f.onload=f.onerror=function(){ loadShared(j+1); }; document.head.appendChild(f); };
+    document.head.appendChild(s);
+  }
   function loadNext(i){
-    if(i >= files.length) return;
+    if(i >= files.length){ loadShared(0); return; }
     var s = document.createElement('script');
     s.src = 'js/' + files[i] + '.js?t=' + bust;
     s.onload = function(){ loadNext(i+1); };
