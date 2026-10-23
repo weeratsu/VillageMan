@@ -13,6 +13,7 @@ const ROUTES = {
 };
 
 function switchTab(tab){
+  try{window.scrollTo(0,0);}catch(_){}
   document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.tab===tab));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
   const pane = document.getElementById('tab-' + tab);
