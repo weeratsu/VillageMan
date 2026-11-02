@@ -24,15 +24,17 @@ async function renderUtilities(){
     <div class="sub-tabs" style="display:flex;gap:2px;margin-bottom:10px">
       <span class="sub-tab ${_utilSub==='bills'?'active':''}" onclick="utilSub('bills')"><i class="fa-solid fa-file-invoice-dollar"></i> Bills</span>
       <span class="sub-tab ${_utilSub==='meters'?'active':''}" onclick="utilSub('meters')"><i class="fa-solid fa-gauge"></i> Meters</span>
+      <span class="sub-tab ${_utilSub==='readings'?'active':''}" onclick="utilSub('readings')"><i class="fa-solid fa-gauge-high"></i> Readings</span>
     </div>
     <div id="util-body"></div>`;
   if(!document.getElementById('util-substyle')){
     const st=document.createElement('style'); st.id='util-substyle';
-    st.textContent='.sub-tab{padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg3);color:var(--text2);display:inline-flex;gap:5px;align-items:center}.sub-tab:hover{background:var(--surface)}.sub-tab.active{background:var(--primary);color:#fff;border-color:var(--primary)}';
+    st.textContent='.sub-tab{padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg3);color:var(--text2);display:inline-flex;gap:5px;align-items:center}.sub-tab:hover{background:var(--surface)}.sub-tab.active{background:var(--primary);color:#fff;border-color:var(--primary)}#bl-form-wrap.bl-modal{position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.45);overflow:auto;padding:24px 12px}#bl-form-wrap.bl-modal>.card{max-width:1000px;margin:0 auto;box-shadow:0 10px 40px rgba(0,0,0,.35)}';
     document.head.appendChild(st);
   }
   if(_utilSub==='meters') await renderMeters();
-  else await renderBills();
+  else if(_utilSub==='readings' && window.renderReadings) await window.renderReadings();
+  else { if(window.applyCentralReadings){ try{ await window.applyCentralReadings(); }catch(e){ console.error(e); } } await renderBills(); }
 }
 function utilSub(s){ _utilSub=s; renderUtilities(); }
 
@@ -355,18 +357,26 @@ function _utilLogPathsForBill(b, meters){
 function _billMeterPhotoSrc(b, meters){
   // Resolve the meter-photo path for a bill row (same index-first logic as the report).
   if(!b) return '';
-  if(b.meter_photo_path) return b.meter_photo_path;
-  var period=b.period||''; if(!period) return '';
+  var _stored=b.meter_photo_path||'';
+  var period=b.period||''; if(!period) return _stored;
   var m=(meters||[]).find(function(x){ return x.id===b.meter_id; });
   var cmn=b.central_meter_no||'';
-  var meterNo=cmn||(m?(m.installation||m.meter_no||m.ca_no||''):''); if(!meterNo) return '';
+  var meterNo=cmn||(m?(m.installation||m.meter_no||m.ca_no||''):''); if(!meterNo) return _stored;
   var type=(m?m.utility_type:'')||b.utility_type||'electricity';
   var cat=(function(tp){ var s=(tp||'').toLowerCase(); if(s.indexOf('w')===0||s.indexOf('water')>=0||s.indexOf('\u0e19')>=0) return 'water'; return 'electricity'; })(type);
   var year=(String(period).split('-')[0])||'';
   var base=(window.CM_DATA_META&&window.CM_DATA_META.meter_photo_base)||'meter-photos';
   var idx=window.VM_PHOTO_INDEX;
   if(idx){ var key=cat+'/'+year+'/'+meterNo+'_'+period; if(idx[key]&&idx[key].file){ return String(base).replace(/\/+$/,'')+'/'+idx[key].file; } }
+  if(_stored) return _stored;
   try{ var t=U.meterPhotoTarget(type, period, [meterNo, period], 'jpg', base); return t.path; }catch(e){ return ''; }
+}
+function _centralMeterOpts(meters){
+  var ms=(meters||[]).filter(function(m){ return (m.role||'main')==='sub'; });
+  if(!ms.length) ms=(meters||[]).filter(function(m){ return (m.utility_type||'electricity')!=='water'; });
+  var seen={};
+  return ms.map(function(m){ var no=m.installation||m.meter_no||m.ca_no||''; if(!no||seen[no]) return ''; seen[no]=1;
+    return '<option value="'+U.esc(no)+'">'+U.esc(no+(m.purpose?' - '+m.purpose:''))+'</option>'; }).join('');
 }
 async function renderBills(){
   const repo = window.CM_REPO;
@@ -544,7 +554,7 @@ async function renderBills(){
           <div class="mea-sec-h" style="border-radius:6px 6px 0 0">\u0e01\u0e32\u0e23\u0e41\u0e1a\u0e48\u0e07 \u0e44\u0e1f\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07 / \u0e44\u0e1f\u0e1a\u0e49\u0e32\u0e19</div>
           <div class="mea-split-in">
             <div class="mea-hcell"><span class="mea-hlabel">\u0e27\u0e31\u0e19\u0e17\u0e35\u0e48\u0e08\u0e14\u0e21\u0e34\u0e40\u0e15\u0e2d\u0e23\u0e4c\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07 (Central reading date)</span><input class="mea-in" id="bl-central_date" type="date"></div>
-            <div class="mea-hcell"><span class="mea-hlabel">\u0e40\u0e25\u0e02\u0e21\u0e34\u0e40\u0e15\u0e2d\u0e23\u0e4c\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07 (Central meter no.)</span><input class="mea-in" id="bl-central_meter_no" placeholder="\u0e40\u0e0a\u0e48\u0e19 9788192"></div>
+            <div class="mea-hcell"><span class="mea-hlabel">\u0e40\u0e25\u0e02\u0e21\u0e34\u0e40\u0e15\u0e2d\u0e23\u0e4c\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07 (Central meter no.)</span><select class="mea-in" id="bl-central_meter_no"><option value="">-</option>${_centralMeterOpts(meters)}</select></div>
             <div class="mea-hcell"><span class="mea-hlabel">Central Present (\u0e04\u0e23\u0e31\u0e49\u0e07\u0e19\u0e35\u0e49)</span><input class="mea-in mea-num" id="bl-central_present" type="number" step="any" oninput="billRecalcSplit()"></div>
             <div class="mea-hcell"><span class="mea-hlabel">Central Prev (\u0e04\u0e23\u0e31\u0e49\u0e07\u0e01\u0e48\u0e2d\u0e19) <span class="text-muted" id="bl-cprevnote" style="text-transform:none"></span></span><input class="mea-in mea-num" id="bl-central_prev" type="number" step="any" oninput="billRecalcSplit()"></div>
             <div class="mea-hcell"><span class="mea-hlabel">Central Units</span><input class="mea-in mea-num mea-strong" id="bl-central_units" type="number" step="any" readonly></div>
@@ -1354,7 +1364,7 @@ async function editBill(id){
   if(!b) return;
   const s=(k,v)=>{const e=document.getElementById(k); if(e) e.value=(v==null?'':v);};
   document.getElementById('bl-edit-id').value=id;   // set FIRST so meterPicked won't carry-over
-  var _efw=document.getElementById('bl-form-wrap'); if(_efw) _efw.style.display='';
+  var _efw=document.getElementById('bl-form-wrap'); if(_efw){ _efw.style.display=''; _efw.classList.add('bl-modal'); }
   var _eab=document.getElementById('bl-addbtn'); if(_eab) _eab.style.display='none';
   s('bl-meter_id', b.meter_id);
   _setBillPeriod(b.period); s('bl-reading_date',b.reading_date||''); s('bl-due_date',b.due_date||'');
@@ -1395,6 +1405,7 @@ async function editBill(id){
     billRecalcSplit();
   }
   _setBillSaveBtn();
+  try{ var _rp=await _buildMeterPhotoPath('jpg'); if(_rp && _rp.found){ s('bl-meter_photo_path',_rp.path); } }catch(e){}
   window.scrollTo({top:0,behavior:'smooth'});
 }
 async function deleteBill(id){
@@ -1404,7 +1415,7 @@ async function deleteBill(id){
 /* Open a FRESH, empty bill form (the familiar "click Add Bill -> blank form" flow). */
 function billShowAddForm(){
   clearBillForm();                                   // empties fields + resets edit state
-  var w=document.getElementById('bl-form-wrap'); if(w) w.style.display='';
+  var w=document.getElementById('bl-form-wrap'); if(w){ w.style.display=''; w.classList.add('bl-modal'); }
   var ab=document.getElementById('bl-addbtn'); if(ab) ab.style.display='none';
   if(typeof meterPicked==="function"){ meterPicked(); }        // show meter info + carry prev reading
   if(!document.getElementById('bl-edit-id').value){ if(typeof billPeriodChanged==='function') billPeriodChanged(); }  // seed period->date defaults
@@ -1418,7 +1429,7 @@ function clearBillForm(){
   const paid=document.getElementById('bl-paid'); if(paid) paid.value='';
   const idf=document.getElementById('bl-edit-id'); if(idf) idf.value='';
   window._billPaidConfirmed=false;
-  var _fw=document.getElementById('bl-form-wrap'); if(_fw) _fw.style.display='none';
+  var _fw=document.getElementById('bl-form-wrap'); if(_fw){ _fw.style.display='none'; _fw.classList.remove('bl-modal'); }
   var _ab=document.getElementById('bl-addbtn'); if(_ab) _ab.style.display='';
   const btn=document.getElementById('bl-save'); if(btn) btn.innerHTML='<i class="fa-solid fa-plus"></i> Add Bill';
   _setBillPeriod(U.curPeriod());
@@ -1649,3 +1660,6 @@ async function vmRefreshBills(){
   else U.toast(r.changed ? ('\u2705 New UtilityLog data ('+String(r.at).replace('T',' ').slice(0,16)+')') : 'UtilityLog already up to date');
 }
 window.vmRefreshBills=vmRefreshBills;
+window._billMeterPhotoSrc = _billMeterPhotoSrc;
+document.addEventListener('click',function(e){ if(e.target&&e.target.id==='bl-form-wrap'&&e.target.classList.contains('bl-modal')&&typeof clearBillForm==='function') clearBillForm(); });
+document.addEventListener('keydown',function(e){ var w=document.getElementById('bl-form-wrap'); if(e.key==='Escape'&&w&&w.classList.contains('bl-modal')&&typeof clearBillForm==='function') clearBillForm(); });

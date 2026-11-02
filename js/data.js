@@ -18,6 +18,7 @@ function defaultData(){
     utility_bills: [],       // common-area metered bills \u2014 see shape below
     vendors: [],             // {id, name, service_type, phone, email, notes, rating}
     emergency_contacts: [],  // {id, label, phone, category, sort_order}
+    central_readings: [],    // {id, meter_id, main_meter_id, meter_no, read_date, period, prev_reading, reading, units}
     counters: { receipt_seq: 0 } // running receipt number sequence
   };
 }
@@ -71,6 +72,7 @@ function migrate(d){
     utility_bills: Array.isArray(d.utility_bills) ? d.utility_bills : [],
     vendors: Array.isArray(d.vendors) ? d.vendors : [],
     emergency_contacts: Array.isArray(d.emergency_contacts) ? d.emergency_contacts : [],
+    central_readings: Array.isArray(d.central_readings) ? d.central_readings : [],
     counters: Object.assign(base.counters, d.counters || {})
   };
 }
