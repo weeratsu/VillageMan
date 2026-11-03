@@ -598,11 +598,14 @@ async function renderBills(){
     <div id="bl-newbanner"></div>
     <div class="card">
       <h2><i class="fa-solid fa-list"></i> Utility Bills</h2>
-      <div class="flex gap-2 flex-wrap" style="align-items:center;margin-bottom:8px;font-size:11px">
-        <span class="text-muted"><i class="fa-solid fa-link-slash"></i> Pre-piggyback bills:</span>
-        <span class="text-muted">Piggyback starts</span>
-        <select class="inp" id="bl-pivot-period" style="max-width:120px;font-size:11px">${_periodOptsForBills(bills)}</select>
-<button class="btn btn-ghost" style="font-size:11px;padding:3px 8px" onclick="markHomeOnlyBefore()" title="Mark all bills before the selected period as home-only (excluded from the common-area report)"><i class="fa-solid fa-check-double"></i> Mark earlier as home-only</button> <button class="btn btn-ghost" style="font-size:11px;padding:3px 8px" onclick="syncAllFromUtilityLog()" title="Refresh deadline, paid date and invoice/receipt paths of ALL bills from UtilityLog"><i class="fa-solid fa-file-arrow-down"></i> Sync all from UtilityLog</button>
+      <div style="position:relative;display:flex;justify-content:flex-end;margin:-30px 0 8px">
+        <button class="btn btn-ghost" style="font-size:13px;padding:2px 10px" title="More" onclick="var m=this.nextElementSibling;m.style.display=m.style.display==='none'?'block':'none'"><i class="fa-solid fa-ellipsis"></i></button>
+        <div style="display:none;position:absolute;right:0;top:30px;z-index:50;min-width:260px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.15);padding:6px;font-size:11px">
+          <button class="btn btn-ghost" style="width:100%;justify-content:flex-start;font-size:11px" onclick="this.parentNode.style.display='none';syncAllFromUtilityLog()"><i class="fa-solid fa-file-arrow-down"></i> Sync all from UtilityLog</button>
+          <div style="border-top:1px solid var(--border);margin:6px 0;padding-top:6px;color:var(--text3)">Pre-piggyback (one-time setup)</div>
+          <div style="display:flex;gap:4px;align-items:center"><select class="inp" id="bl-pivot-period" style="flex:1;font-size:11px">${_periodOptsForBills(bills)}</select>
+          <button class="btn btn-ghost" style="font-size:11px;padding:3px 8px" onclick="markHomeOnlyBefore()" title="Mark all bills before the selected period as home-only"><i class="fa-solid fa-check-double"></i> Mark earlier</button></div>
+        </div>
       </div>
       ${bills.length?`<table class="tbl"><thead><tr><th style="cursor:pointer" onclick="setBillSort('meter')">Meter${_billSortArrow('meter')}</th><th style="cursor:pointer" onclick="setBillSort('period')">Period${_billSortArrow('period')}</th><th class="r" style="cursor:pointer" onclick="setBillSort('units')">Units${_billSortArrow('units')}</th><th class="r" style="cursor:pointer" onclick="setBillSort('total')">Total${_billSortArrow('total')}</th><th style="cursor:pointer" onclick="setBillSort('deadline')">Deadline${_billSortArrow('deadline')}</th><th style="cursor:pointer" onclick="setBillSort('status')">Status${_billSortArrow('status')}</th><th class="r">Slip</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
                     :`<p class="text-muted" style="padding:8px">No bills yet.</p>`}
@@ -1516,7 +1519,9 @@ async function syncAllFromUtilityLog(){
       else { mismatch.push(b.period+' ('+bu+' units)'); return; }   // ambiguous: leave untouched
     }
     if(!lb){ notFound++; return; }
-    var before=JSON.stringify([b.period,b.due_date,b.paid,b.paid_date,b.invoice_path,b.receipt_path]);
+    var before=JSON.stringify([b.period,b.due_date,b.paid,b.paid_date,b.invoice_path,b.receipt_path,b.total_amount,b.bill_total,b.vat]);
+    if(!b.split_meter && !(Number(b.total_amount)>0) && Number(lb.amount)>0){ b.total_amount=Number(lb.amount); if(lb.vat!=null) b.vat=Number(lb.vat)||0; }
+    if(b.split_meter && !(Number(b.bill_total)>0) && Number(lb.amount)>0){ b.bill_total=Number(lb.amount); }
     if(lb.due_date) b.due_date=lb.due_date;
     else if(b.due_date){
       // UL has no deadline for this period (older PDFs). A real deadline falls within
@@ -1534,7 +1539,7 @@ async function syncAllFromUtilityLog(){
     // UtilityLog is the source of truth: if the log has no file for this period, the stored path is stale -> clear it.
     b.invoice_path=paths.invoice||'';
     b.receipt_path=paths.receipt||'';
-    if(JSON.stringify([b.period,b.due_date,b.paid,b.paid_date,b.invoice_path,b.receipt_path])!==before) changed++;
+    if(JSON.stringify([b.period,b.due_date,b.paid,b.paid_date,b.invoice_path,b.receipt_path,b.total_amount,b.bill_total,b.vat])!==before) changed++;
   });
   var extra=(fixedPeriod.length?('\nPeriod corrected (units+amount match): '+fixedPeriod.join(', ')):'')
            +(clearedDue.length?('\nWrong deadline cleared (no deadline in UtilityLog): '+clearedDue.join(', ')):'')
