@@ -1,7 +1,7 @@
 window.VM_PHOTO_INDEX = {
  "electricity/2026/9788192_2026-08": {
-  "file": "electricity/2026/9788192_2026-08.jpg",
-  "shot": ""
+  "file": "electricity/2026/9788192_2026-08_2026-09-24.jpg",
+  "shot": "2026-09-24"
  },
  "electricity/2026/9788192_2026-09": {
   "file": "electricity/2026/9788192_2026-09_2026-10-03.jpg",
