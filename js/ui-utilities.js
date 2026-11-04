@@ -708,6 +708,22 @@ function _latestUtilLogPeriod(kind, ca){
 }
 /* Auto-fill the main-meter fields from the UtilityLog bill matching the selected period + meter type.
    silent=true suppresses the 'not found' toast (used on auto triggers like period change). */
+/* Prefill the central (piggyback) block from Utilities > Readings for this main meter + period. */
+async function _fillCentralFromReadings(){
+  var mid=(document.getElementById('bl-meter_id')||{}).value; var per=_billPeriodValue();
+  if(!mid||!per) return false;
+  var D=await window.CM_REPO.all();
+  var r=(D.central_readings||[]).find(function(x){ return x.main_meter_id===mid && x.period===per; });
+  if(!r) return false;
+  var sp=document.getElementById('bl-split'); if(sp && !sp.checked){ sp.checked=true; if(typeof billSplitToggled==='function') billSplitToggled(); }
+  var s=function(id,v){ var e=document.getElementById(id); if(e) e.value=(v==null?'':v); };
+  s('bl-central_date', r.read_date||''); s('bl-central_prev', r.prev_reading); s('bl-central_present', r.reading);
+  if(r.meter_no){ var cm=document.getElementById('bl-central_meter_no'); if(cm) cm.value=r.meter_no; }
+  if(typeof billRecalcSplit==='function') billRecalcSplit();
+  return true;
+}
+window._fillCentralFromReadings=_fillCentralFromReadings;
+
 async function _fillFromUtilityLog(silent){
   var mid=(document.getElementById('bl-meter_id')||{}).value;
   if(!mid){ if(!silent) U.toast('Pick a meter first'); return; }
@@ -784,6 +800,8 @@ async function _fillFromUtilityLog(silent){
   var _ca=(b.ca_no?(' \u00b7 CA '+b.ca_no):'');
   if(note){ note.innerHTML='<i class="fa-solid fa-circle-check"></i> UtilityLog: '+kind+' '+period+_ca+' \u2014 '+U.fmtNum(units)+' \u0e2b\u0e19\u0e48\u0e27\u0e22 / '+U.fmtMoney(total)+(b.paid?' (\u0e08\u0e48\u0e32\u0e22\u0e41\u0e25\u0e49\u0e27)':''); note.className='text-success'; }
   billRecalcTotal();
+  try{ await _fillCentralFromReadings(); }catch(e){}
+  try{ var _ph=document.getElementById('bl-meter_photo_path'); if(_ph && !_ph.value){ var _rp=await _buildMeterPhotoPath('jpg'); if(_rp && _rp.found) _ph.value=_rp.path; } }catch(e){}
   if(!silent) U.toast('\u0e14\u0e36\u0e07\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25\u0e08\u0e32\u0e01 UtilityLog \u0e41\u0e25\u0e49\u0e27');
 }
 async function meterPicked(){
@@ -904,6 +922,7 @@ function billPeriodChanged(){
     }
   }
   billReadingDateChanged();
+  setTimeout(function(){ _fillCentralFromReadings(); },50);
 }
 function billReadingDateChanged(){
   var rd=document.getElementById('bl-reading_date'); var dl=document.getElementById('bl-due_date');

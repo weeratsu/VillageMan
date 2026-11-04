@@ -77,6 +77,39 @@
     function _rows(d){ var n=0; if(!d) return 0; _COLS.forEach(function(c){ if(Array.isArray(d[c])) n+=d[c].length; }); return n; }
     function _isReal(d){ return _rows(d)>=3; }
 
+
+    // 3-WAY MERGE (Nov 4 2026): a stale tab/device used to push its whole old cache and wipe
+    // records added elsewhere. Now every push re-reads the Sheet and merges per record id:
+    // local wins only for records this device changed/deleted since its last sync (BASE).
+    var BASE_KEY = SKEY + '_base';
+    function _readBase(){ try{ var r=localStorage.getItem(BASE_KEY); return r?JSON.parse(r):null; }catch(e){ return null; } }
+    function _writeBase(d){ try{ localStorage.setItem(BASE_KEY, JSON.stringify(d)); }catch(e){} }
+    function _merge3(base, local, remote){
+      if(!base) return local;
+      var out={}, keys={};
+      [base,local,remote].forEach(function(o){ Object.keys(o||{}).forEach(function(k){ keys[k]=1; }); });
+      Object.keys(keys).forEach(function(k){
+        var b=base[k], l=local[k], r=remote[k];
+        if(Array.isArray(l)||Array.isArray(r)){
+          l=l||[]; r=r||[]; b=Array.isArray(b)?b:[];
+          var bm={}, lm={}, res=[], seen={};
+          b.forEach(function(x){ if(x&&x.id) bm[x.id]=JSON.stringify(x); });
+          l.forEach(function(x){ if(x&&x.id) lm[x.id]=x; });
+          r.forEach(function(x){
+            if(!x||!x.id){ res.push(x); return; }
+            seen[x.id]=1;
+            var lx=lm[x.id];
+            if(!lx){ if(bm[x.id]) return; res.push(x); return; }
+            res.push(JSON.stringify(lx)!==bm[x.id] ? lx : x);
+          });
+          l.forEach(function(x){ if(x&&x.id&&!seen[x.id]&&!bm[x.id]) res.push(x); });
+          out[k]=res;
+        } else {
+          out[k] = (JSON.stringify(l)!==JSON.stringify(b)) ? l : (r!==undefined ? r : l);
+        }
+      });
+      return out;
+    }
     function _rerender(){
       try{
         var tab = (location.hash||'').replace('#','') || 'dashboard';
@@ -135,6 +168,7 @@
         var remote = migrate(_fixDates(res.data || {}));
         if(!_isReal(remote) && _isReal(self._d)){ self._gen++; _setDirty(true); self._schedulePush(0); _status('\u2191 restoring Sheet from local\u2026'); return; }  // Sheet empty/broken -> repair from local
         var changed = JSON.stringify(remote) !== JSON.stringify(self._d);
+        _writeBase(remote);
         if(changed){ self._d = remote; _writeCache(remote); _rerender(); }
         _status('\u2713 synced', 'var(--success,#2a7)');
       }).catch(function(err){
@@ -161,7 +195,7 @@
       var res = await this._get('all');
       if(!res || !res.ok) throw new Error((res && res.error) || 'load failed');
       this._d = migrate(_fixDates(res.data || {}));
-      _writeCache(this._d);
+      _writeCache(this._d); _writeBase(this._d);
       _status('\u2713 synced', 'var(--success,#2a7)');
       return this._d;
     };
@@ -182,10 +216,17 @@
       if(self._pushing){ self._schedulePush(800); return; }  // one push at a time
       if(!_isReal(self._d)){ console.warn('VillageMan: local data looks empty - NOT sent to Sheet'); _status('\u26a0 local data empty - not sent','var(--danger,#c33)'); return; }
       _status('\u2191 saving to Sheet\u2026');
-      var snapshot = JSON.stringify(self._d);
-      self._pushing = self._post({ action:'replaceAll', data: JSON.parse(snapshot) }).then(function(res){
+      var snapshot = JSON.stringify(self._d), sent=null;
+      self._pushing = self._get('all').then(function(rr){
+        if(!rr || !rr.ok) throw new Error((rr && rr.error) || 'load before save failed');
+        var remote = migrate(_fixDates(rr.data || {}));
+        var merged = _isReal(remote) ? migrate(_merge3(_readBase(), JSON.parse(snapshot), remote)) : JSON.parse(snapshot);
+        sent = merged;
+        return self._post({ action:'replaceAll', data: merged });
+      }).then(function(res){
         if(!res || !res.ok) throw new Error((res && res.error) || 'save failed');
-        if(JSON.stringify(self._d) === snapshot) _setDirty(false);   // no newer edits meanwhile
+        _writeBase(sent);
+        if(JSON.stringify(self._d) === snapshot){ if(JSON.stringify(sent)!==snapshot){ self._d = sent; _writeCache(sent); _rerender(); } _setDirty(false); }
         else self._schedulePush(800);
         _status('\u2713 synced', 'var(--success,#2a7)');
       }).catch(function(err){
