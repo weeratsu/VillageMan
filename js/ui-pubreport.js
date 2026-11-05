@@ -28,31 +28,44 @@ function setPubSort(col){
 function _pubArrow(col){ if(_pubSort!==col) return ''; return _pubAsc?' \u25b2':' \u25bc'; }
 /* Self-contained SVG bar chart of monthly common-area COST (THB) for the selected year.
    No CDN. 12 bars Jan..Dec; the month with the highest cost is highlighted. */
+function _pubSmooth(p){
+  var d='M'+p[0][0].toFixed(1)+','+p[0][1].toFixed(1);
+  for(var i=0;i<p.length-1;i++){ var a=p[i-1]||p[i], b=p[i], c=p[i+1], e=p[i+2]||c;
+    d+=' C'+(b[0]+(c[0]-a[0])/6).toFixed(1)+','+(b[1]+(c[1]-a[1])/6).toFixed(1)+' '+(c[0]-(e[0]-b[0])/6).toFixed(1)+','+(c[1]-(e[1]-b[1])/6).toFixed(1)+' '+c[0].toFixed(1)+','+c[1].toFixed(1); }
+  return d;
+}
 function _pubMonthlyCostChart(bills){
   var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   var vals=[]; for(var i=0;i<12;i++) vals.push(0);
-  (bills||[]).forEach(function(b){
-    var pp=(b.period||'').split('-'); if(pp.length<2) return;
-    var mi=parseInt(pp[1],10)-1; if(mi<0||mi>11) return;
-    var amt=b.split_meter?(Number(b.central_amount)||0):(Number(b.total_amount)||0);
-    vals[mi]+=amt;
-  });
-  var max=Math.max.apply(null, vals.concat([1]));
-  var W=640,H=170,padT=12,padB=22,padL=8,padR=8; var n=12; var bw=(W-padL-padR)/n; var bars='';
-  var maxIdx=-1,maxV=-1; for(var k=0;k<12;k++){ if(vals[k]>maxV){maxV=vals[k];maxIdx=k;} }
-  for(var j=0;j<n;j++){
-    var v=vals[j]; var bh=max>0?(v/max)*(H-padT-padB):0;
-    var x=padL+j*bw+bw*0.15, y=H-padB-bh, w=bw*0.7;
-    var fill=(j===maxIdx&&v>0)?'var(--error)':'var(--primary-bg)';
-    var stroke=(j===maxIdx&&v>0)?'var(--error)':'var(--border2)';
-    bars+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+w.toFixed(1)+'" height="'+Math.max(0,bh).toFixed(1)+'" rx="2" fill="'+fill+'" stroke="'+stroke+'"><title>'+MON[j]+': '+U.fmtMoney(v)+'</title></rect>';
-    if(v>0){ bars+='<text x="'+(x+w/2).toFixed(1)+'" y="'+(y-2).toFixed(1)+'" text-anchor="middle" font-size="7" fill="var(--text3)">'+Math.round(v)+'</text>'; }
-    bars+='<text x="'+(x+w/2).toFixed(1)+'" y="'+(H-padB+10)+'" text-anchor="middle" font-size="8" fill="var(--text3)">'+MON[j]+'</text>';
+  (bills||[]).forEach(function(b){ var pp=(b.period||'').split('-'); if(pp.length<2) return; var mi=parseInt(pp[1],10)-1; if(mi<0||mi>11) return; vals[mi]+=b.split_meter?(Number(b.central_amount)||0):(Number(b.total_amount)||0); });
+  var W=640,H=190,padT=22,padB=24,padL=10,padR=10,n=12,bw=(W-padL-padR)/n,h=H-padT-padB;
+  var max=Math.max.apply(null, vals.concat([1]))*1.12;
+  var X=function(k){ return padL+k*bw+bw/2; }, Y=function(v){ return H-padB-(v/max)*h; };
+  var pts=[]; for(var k=0;k<n;k++){ if(vals[k]>0) pts.push([X(k),Y(vals[k]),vals[k],k]); }
+  var out='<defs><linearGradient id="pubArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--primary)" stop-opacity=".28"/><stop offset="100%" stop-color="var(--primary)" stop-opacity="0"/></linearGradient></defs>';
+  for(var g=0;g<=3;g++){ var gy=padT+h*g/3; out+='<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+gy.toFixed(1)+'" y2="'+gy.toFixed(1)+'" stroke="var(--border)" stroke-width=".6"/>'; }
+  for(var m=0;m<n;m++) out+='<text x="'+X(m).toFixed(1)+'" y="'+(H-padB+14)+'" text-anchor="middle" font-size="8" fill="var(--text3)">'+MON[m]+'</text>';
+  if(pts.length){
+    var avg=pts.reduce(function(s,p){return s+p[2];},0)/pts.length, ay=Y(avg);
+    if(pts.length>1){
+      var line=_pubSmooth(pts);
+      out+='<path d="'+line+' L'+pts[pts.length-1][0].toFixed(1)+','+(H-padB)+' L'+pts[0][0].toFixed(1)+','+(H-padB)+' Z" fill="url(#pubArea)"/>';
+      out+='<path d="'+line+'" fill="none" stroke="var(--primary)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>';
+    }
+    out+='<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+ay.toFixed(1)+'" y2="'+ay.toFixed(1)+'" stroke="var(--error)" stroke-width="1.2" stroke-dasharray="5 4"/>';
+    out+='<rect x="'+(W-padR-118)+'" y="'+(ay-15).toFixed(1)+'" width="118" height="13" rx="6" fill="var(--error)" opacity=".12"/>';
+    out+='<text x="'+(W-padR-6)+'" y="'+(ay-5.5).toFixed(1)+'" text-anchor="end" font-size="8" font-weight="700" fill="var(--error)">\u0e40\u0e09\u0e25\u0e35\u0e48\u0e22 '+U.fmtMoney(avg)+'</text>';
+    var mx=pts.reduce(function(a,p){return p[2]>a[2]?p:a;},pts[0]);
+    pts.forEach(function(p){
+      var top=p===mx;
+      out+='<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="'+(top?4.5:3.5)+'" fill="var(--bg2,#fff)" stroke="'+(top?'var(--error)':'var(--primary)')+'" stroke-width="2"><title>'+MON[p[3]]+': '+U.fmtMoney(p[2])+'</title></circle>';
+      out+='<text x="'+p[0].toFixed(1)+'" y="'+(p[1]-8).toFixed(1)+'" text-anchor="middle" font-size="8" font-weight="600" fill="'+(top?'var(--error)':'var(--text2)')+'">'+Math.round(p[2]).toLocaleString('en-US')+'</text>';
+    });
+  } else {
+    out+='<text x="'+(W/2)+'" y="'+(H/2)+'" text-anchor="middle" font-size="10" fill="var(--text3)">-</text>';
   }
-  return '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" preserveAspectRatio="xMidYMid meet">'+bars+'</svg>';
+  return '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" preserveAspectRatio="xMidYMid meet">'+out+'</svg>';
 }
-
-/* Build the 6-step calculation explanation for ONE split bill (central share). */
 function _calcSteps(b){
   var billTot=Number(b.bill_total)||0;
   var mainUnits=Number(b.units_used)||0;
@@ -73,12 +86,12 @@ function _calcSteps(b){
   h+=S(3,'\u00d7 \u0e2b\u0e19\u0e48\u0e27\u0e22\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07 ('+U.fmtNum(cu)+' \u0e2b\u0e19\u0e48\u0e27\u0e22)', (ce!=null?('<span class="text-muted" style="font-size:10px">('+(ratePerUnit!=null?U.fmtMoney(ratePerUnit):dash)+' \u00d7 '+U.fmtNum(cu)+') = </span>'+U.fmtMoney(ce)):dash));
   h+=S(4,'+ Ft (\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07)', (cf!=null?('<span class="text-muted" style="font-size:10px">('+(ftRate!=null?U.fmtRate(ftRate):dash)+' \u00d7 '+U.fmtNum(cu)+') = </span>'+U.fmtMoney(cf)):dash));
   h+=S(5,'+ VAT 7%', (cv!=null?('<span class="text-muted" style="font-size:10px">('+U.fmtMoney(preVat)+' \u00d7 7%) = </span>'+U.fmtMoney(cv)):dash));
-  h+=S(6,'<b>= \u0e22\u0e2d\u0e14\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07\u0e17\u0e35\u0e48\u0e15\u0e49\u0e2d\u0e07\u0e40\u0e01\u0e47\u0e1a</b>', '<b>'+U.fmtMoney(ca)+'</b>');
+  h+=S(6,'<b>= \u0e22\u0e2d\u0e14\u0e04\u0e48\u0e32\u0e44\u0e1f\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07\u0e17\u0e35\u0e48\u0e15\u0e49\u0e2d\u0e07\u0e40\u0e01\u0e47\u0e1a</b>', '<b>'+U.fmtMoney(ca)+'</b>');
   h+='<div style="font-size:9px;color:var(--text3);margin-top:4px">* \u0e04\u0e48\u0e32\u0e1a\u0e23\u0e34\u0e01\u0e32\u0e23 (service fee) \u0e44\u0e21\u0e48\u0e23\u0e27\u0e21\u0e43\u0e19\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07 \u2014 \u0e40\u0e1b\u0e47\u0e19\u0e04\u0e48\u0e32\u0e21\u0e34\u0e40\u0e15\u0e2d\u0e23\u0e4c\u0e02\u0e2d\u0e07\u0e1a\u0e49\u0e32\u0e19</div>';
   return h;
 }
 
-async function renderPubReport(){
+async function renderPubReport(){ setTimeout(_vmpLabel,0);
   var el=document.getElementById('tab-pubreport'); if(!el) return;
   var D=await window.CM_REPO.all();
   var bills=(D.utility_bills||[]).filter(function(b){ if(b.home_only) return false; var y=(b.period||'').split('-')[0]; return parseInt(y,10)===_pubYear; });
@@ -158,7 +171,7 @@ async function renderPubReport(){
       +'</tr>';
     if(isSplit){
       r+='<tr class="pub-detail" id="pd-'+b.id+'" style="display:none;background:var(--bg2)"><td colspan="11" style="padding:10px 14px;font-size:11px;line-height:1.6">'
-        +'<div style="font-weight:700;margin-bottom:4px"><i class="fa-solid fa-calculator"></i> \u0e27\u0e34\u0e18\u0e35\u0e04\u0e34\u0e14\u0e22\u0e2d\u0e14\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07 ('+U.esc(b.period||'')+')</div>'
+        +'<div style="font-weight:700;margin-bottom:4px"><i class="fa-solid fa-calculator"></i> \u0e27\u0e34\u0e18\u0e35\u0e04\u0e34\u0e14\u0e22\u0e2d\u0e14\u0e04\u0e48\u0e32\u0e44\u0e1f\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07 ('+U.esc(b.period||'')+')</div>'
         +'<div style="max-width:460px">'+_calcSteps(b)+'</div>'
         +'<div style="margin-top:6px;font-size:10px;color:var(--text3)">\u0e2b\u0e19\u0e48\u0e27\u0e22\u0e21\u0e34\u0e40\u0e15\u0e2d\u0e23\u0e4c\u0e23\u0e27\u0e21\u0e17\u0e31\u0e49\u0e07\u0e1a\u0e34\u0e25 '+U.fmtNum(Number(b.units_used)||0)+' \u2014 \u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07 '+U.fmtNum(Number(b.central_units)||0)+' / \u0e1a\u0e49\u0e32\u0e19 '+U.fmtNum(Number(b.home_units)||0)+'</div>'
         +(b.invoice_path?('<div style="margin-top:3px"><a href="#" onclick="pubViewMedia(this.getAttribute(\'data-src\'),event);return false;" data-src="'+U.esc(b.invoice_path)+'"><i class="fa-solid fa-file-invoice"></i> \u0e43\u0e1a\u0e41\u0e08\u0e49\u0e07\u0e2b\u0e19\u0e35\u0e49 (Invoice)</a></div>'):'')+(b.receipt_path?('<div style="margin-top:3px"><a href="#" onclick="pubViewMedia(this.getAttribute(\'data-src\'),event);return false;" data-src="'+U.esc(b.receipt_path)+'"><i class="fa-solid fa-receipt"></i> \u0e43\u0e1a\u0e40\u0e2a\u0e23\u0e47\u0e08 (Receipt)</a></div>'):'')+'</td></tr>';
@@ -168,18 +181,18 @@ async function renderPubReport(){
 
   var tbl = sorted.length ? ('<table class="tbl"><thead><tr>'
     +'<th style="cursor:pointer" onclick="setPubSort(\'period\')">\u0e07\u0e27\u0e14'+_pubArrow('period')+'</th>'+'<th>\u0e1b\u0e23\u0e30\u0e40\u0e20\u0e17</th>'+'<th style="cursor:pointer" onclick="setPubSort(\'meter\')">\u0e40\u0e25\u0e02\u0e21\u0e34\u0e40\u0e15\u0e2d\u0e23\u0e4c'+_pubArrow('meter')+'</th>'
-    +'<th class="r" style="cursor:pointer" onclick="setPubSort(\'prev\')">\u0e40\u0e25\u0e02\u0e40\u0e01\u0e48\u0e32'+_pubArrow('prev')+'</th>'+'<th class="r" style="cursor:pointer" onclick="setPubSort(\'pres\')">\u0e40\u0e25\u0e02\u0e43\u0e2b\u0e21\u0e48'+_pubArrow('pres')+'</th>'+'<th class="r" style="cursor:pointer" onclick="setPubSort(\'units\')">\u0e2b\u0e19\u0e48\u0e27\u0e22'+_pubArrow('units')+'</th>'+'<th class="r" style="cursor:pointer" onclick="setPubSort(\'energy\')">\u0e04\u0e48\u0e32\u0e1e\u0e25\u0e31\u0e07\u0e07\u0e32\u0e19'+_pubArrow('energy')+'</th>'+'<th class="r" style="cursor:pointer" onclick="setPubSort(\'vat\')">VAT'+_pubArrow('vat')+'</th>'+'<th class="r" style="cursor:pointer" onclick="setPubSort(\'total\')">\u0e23\u0e27\u0e21(\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07)'+_pubArrow('total')+'</th>'+'<th class="r" style="cursor:pointer" onclick="setPubSort(\'status\')">\u0e2a\u0e16\u0e32\u0e19\u0e30'+_pubArrow('status')+'</th>'+'<th class="r">\u0e23\u0e39\u0e1b</th>'
+    +'<th class="r" style="cursor:pointer" onclick="setPubSort(\'prev\')">\u0e40\u0e25\u0e02\u0e40\u0e01\u0e48\u0e32'+_pubArrow('prev')+'</th>'+'<th class="r" style="cursor:pointer" onclick="setPubSort(\'pres\')">\u0e40\u0e25\u0e02\u0e43\u0e2b\u0e21\u0e48'+_pubArrow('pres')+'</th>'+'<th class="r" style="cursor:pointer" onclick="setPubSort(\'units\')">\u0e2b\u0e19\u0e48\u0e27\u0e22'+_pubArrow('units')+'</th>'+'<th class="r" style="cursor:pointer" onclick="setPubSort(\'energy\')">\u0e04\u0e48\u0e32\u0e1e\u0e25\u0e31\u0e07\u0e07\u0e32\u0e19'+_pubArrow('energy')+'</th>'+'<th class="r" style="cursor:pointer" onclick="setPubSort(\'vat\')">VAT'+_pubArrow('vat')+'</th>'+'<th class="r" style="cursor:pointer" onclick="setPubSort(\'total\')">\u0e23\u0e27\u0e21(\u0e04\u0e48\u0e32\u0e44\u0e1f\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07)'+_pubArrow('total')+'</th>'+'<th class="r" style="cursor:pointer" onclick="setPubSort(\'status\')">\u0e2a\u0e16\u0e32\u0e19\u0e30'+_pubArrow('status')+'</th>'+'<th class="r">\u0e23\u0e39\u0e1b</th>'
     +'</tr></thead><tbody>'+rows+'</tbody></table>')
     : '<p class="text-muted" style="padding:10px">\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e1a\u0e34\u0e25\u0e43\u0e19\u0e1b\u0e35\u0e19\u0e35\u0e49</p>';
 
   el.innerHTML = '<div class="card">'
-    +'<h2><i class="fa-solid fa-users"></i> \u0e2a\u0e23\u0e38\u0e1b\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07 (\u0e2a\u0e33\u0e2b\u0e23\u0e31\u0e1a\u0e25\u0e39\u0e01\u0e1a\u0e49\u0e32\u0e19)</h2>'
-    +'<p class="text-muted" style="font-size:12px;margin:-4px 0 10px">\u0e2b\u0e19\u0e49\u0e32\u0e19\u0e35\u0e49\u0e41\u0e2a\u0e14\u0e07\u0e04\u0e48\u0e32\u0e2a\u0e32\u0e18\u0e32\u0e23\u0e13\u0e30\u0e02\u0e2d\u0e07\u0e2b\u0e21\u0e39\u0e48\u0e1a\u0e49\u0e32\u0e19 \u0e27\u0e48\u0e32\u0e41\u0e15\u0e48\u0e25\u0e30\u0e07\u0e27\u0e14\u0e04\u0e34\u0e14\u0e2d\u0e22\u0e48\u0e32\u0e07\u0e44\u0e23 \u0e23\u0e27\u0e21\u0e40\u0e17\u0e48\u0e32\u0e44\u0e23</p>'
-    +'<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><label class="text-muted" style="font-size:12px">\u0e1b\u0e35:</label><select class="inp" style="max-width:120px" onchange="setPubYear(this.value)">'+yearOpts+'</select>'+'<button class="btn btn-ghost" style="margin-left:8px;font-size:11px;padding:4px 10px" onclick="exportPublicData()" title="Export bills+meters as villageman_data.js for the public GitHub Pages site"><i class="fa-solid fa-cloud-arrow-up"></i> Export for web</button></div>'+'<div class="card" style="background:var(--bg2);margin-bottom:12px">'+'<h3 style="font-size:12px;margin:0 0 6px"><i class="fa-solid fa-chart-column"></i> \u0e04\u0e48\u0e32\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07\u0e23\u0e32\u0e22\u0e40\u0e14\u0e37\u0e2d\u0e19 ('+_pubYear+')</h3>'+_pubMonthlyCostChart(bills)+'</div>'
+    +'<h2><i class="fa-solid fa-users"></i> \u0e2a\u0e23\u0e38\u0e1b\u0e04\u0e48\u0e32\u0e44\u0e1f\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07 (\u0e2a\u0e33\u0e2b\u0e23\u0e31\u0e1a\u0e25\u0e39\u0e01\u0e1a\u0e49\u0e32\u0e19)</h2>'
+    +'<p class="text-muted" style="font-size:12px;margin:-4px 0 10px">\u0e2b\u0e19\u0e49\u0e32\u0e19\u0e35\u0e49\u0e41\u0e2a\u0e14\u0e07\u0e04\u0e48\u0e32\u0e44\u0e1f\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07\u0e02\u0e2d\u0e07\u0e2b\u0e21\u0e39\u0e48\u0e1a\u0e49\u0e32\u0e19 \u0e27\u0e48\u0e32\u0e41\u0e15\u0e48\u0e25\u0e30\u0e07\u0e27\u0e14\u0e04\u0e34\u0e14\u0e2d\u0e22\u0e48\u0e32\u0e07\u0e44\u0e23 \u0e23\u0e27\u0e21\u0e40\u0e17\u0e48\u0e32\u0e44\u0e23</p>'
+    +'<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><label class="text-muted" style="font-size:12px">\u0e1b\u0e35:</label><select class="inp" style="max-width:120px" onchange="setPubYear(this.value)">'+yearOpts+'</select>'+'<button class="btn btn-ghost" style="margin-left:8px;font-size:11px;padding:4px 10px" onclick="exportPublicData()" title="Export bills+meters as villageman_data.js for the public GitHub Pages site"><i class="fa-solid fa-cloud-arrow-up"></i> Export for web</button>'+'<button class="btn btn-ghost" style="margin-left:4px;font-size:11px;padding:4px 10px" onclick="pubSetupFolder()" title="Choose the VillageManPublic folder once"><i class="fa-solid fa-folder-open"></i> <span id="pub-fold-lbl">Set VMP folder</span></button></div>'+'<div class="card" style="background:var(--bg2);margin-bottom:12px">'+'<h3 style="font-size:12px;margin:0 0 6px"><i class="fa-solid fa-chart-column"></i> \u0e04\u0e48\u0e32\u0e44\u0e1f\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07\u0e23\u0e32\u0e22\u0e40\u0e14\u0e37\u0e2d\u0e19 ('+_pubYear+')</h3>'+_pubMonthlyCostChart(bills)+'</div>'
     +'<div class="kpi-grid">'
-      +kpi('\u0e23\u0e27\u0e21\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07\u0e17\u0e31\u0e49\u0e07\u0e1b\u0e35', U.fmtMoney(totCentral), 'text-error', months+' \u0e07\u0e27\u0e14')
+      +kpi('\u0e23\u0e27\u0e21\u0e04\u0e48\u0e32\u0e44\u0e1f\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07\u0e17\u0e31\u0e49\u0e07\u0e1b\u0e35', U.fmtMoney(totCentral), 'text-error', months+' \u0e07\u0e27\u0e14')
       +kpi('\u0e40\u0e09\u0e25\u0e35\u0e48\u0e22\u0e15\u0e48\u0e2d\u0e40\u0e14\u0e37\u0e2d\u0e19', U.fmtMoney(avg), '', '')
-      +kpi('\u0e2b\u0e19\u0e48\u0e27\u0e22\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07\u0e23\u0e27\u0e21', Math.round(cUnits), '', '')
+      +kpi('\u0e2b\u0e19\u0e48\u0e27\u0e22\u0e04\u0e48\u0e32\u0e44\u0e1f\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07\u0e23\u0e27\u0e21', Math.round(cUnits), '', '')
       +kpi('\u0e1a\u0e34\u0e25\u0e1e\u0e48\u0e27\u0e07 / \u0e1a\u0e34\u0e25\u0e18\u0e23\u0e23\u0e21\u0e14\u0e32', nSplit+' / '+nFlat, '', '\u0e1a\u0e34\u0e25')
     +'</div>'
     +tbl
@@ -289,6 +302,45 @@ window.pubCloseMedia=pubCloseMedia;
 /* Export ONLY the data the public report needs (bills + meters) as villageman_data.js.
    Excludes households / vendors / emergency / promptpay / meta -> safe for a public repo.
    Download it, drop into the VillageManPublic repo, and push (GitHub Pages). */
+/* VMP folder handle, remembered in IndexedDB (browser cannot use a typed path). */
+function _vmpDb(){ return new Promise(function(res,rej){ var r=indexedDB.open('vm_fs',1); r.onupgradeneeded=function(){ r.result.createObjectStore('h'); }; r.onsuccess=function(){ res(r.result); }; r.onerror=function(){ rej(r.error); }; }); }
+function _vmpGet(){ return _vmpDb().then(function(db){ return new Promise(function(res){ var q=db.transaction('h').objectStore('h').get('vmp'); q.onsuccess=function(){ res(q.result||null); }; q.onerror=function(){ res(null); }; }); }).catch(function(){ return null; }); }
+function _vmpPut(h){ return _vmpDb().then(function(db){ return new Promise(function(res){ var t=db.transaction('h','readwrite'); t.objectStore('h').put(h,'vmp'); t.oncomplete=function(){ res(); }; }); }); }
+function _vmpLabel(){ _vmpGet().then(function(h){ var el=document.getElementById('pub-fold-lbl'); if(el) el.textContent=h?('VMP: '+h.name):'Set VMP folder'; }); }
+async function pubSetupFolder(){
+  if(!window.showDirectoryPicker){ U.toast('Browser does not support folder access - use Chrome/Edge'); return; }
+  try{ var h=await window.showDirectoryPicker({id:'vmp', mode:'readwrite'}); await _vmpPut(h); _vmpLabel(); U.toast('VMP folder set: '+h.name); }catch(e){}
+}
+async function _vmpWrite(js){
+  var h=await _vmpGet(); if(!h) return false;
+  try{
+    var p=await h.queryPermission({mode:'readwrite'}); if(p!=='granted') p=await h.requestPermission({mode:'readwrite'}); if(p!=='granted') return false;
+    var fh=await h.getFileHandle('villageman_data.js',{create:true}); var w=await fh.createWritable(); await w.write(js); await w.close(); return h.name;
+  }catch(e){ console.error(e); return false; }
+}
+function _vmpPopup(saved, js, P){
+  var bl=P.utility_bills||[], pub=bl.filter(function(b){return !b.home_only;}), ps=pub.map(function(b){return b.period;}).filter(Boolean).sort();
+  var ph=pub.filter(function(b){return b.meter_photo_rel;}).length, kb=(js.length/1024).toFixed(1);
+  var row=function(k,v){ return '<tr><td style="padding:3px 10px 3px 0;color:var(--text3)">'+k+'</td><td style="padding:3px 0"><b>'+v+'</b></td></tr>'; };
+  var ok=!!saved;
+  var h='<div style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)this.remove()">'
+   +'<div style="background:var(--bg,#fff);border-radius:12px;padding:18px 22px;min-width:340px;max-width:440px;box-shadow:0 10px 30px rgba(0,0,0,.25);font-size:13px">'
+   +'<div style="font-weight:700;font-size:15px;margin-bottom:10px;color:'+(ok?'var(--success,#16a34a)':'var(--warning,#d97706)')+'"><i class="fa-solid '+(ok?'fa-circle-check':'fa-triangle-exclamation')+'"></i> '+(ok?'Export successful':'Saved as download (VMP folder not available)')+'</div>'
+   +'<table style="border-collapse:collapse;width:100%">'
+   +row('File','villageman_data.js ('+kb+' KB)')
+   +row('Saved to',ok?('G:\\My Drive\\Develop\\'+U.esc(saved)):'Downloads folder')
+   +row('Time',new Date().toLocaleString('en-GB'))
+   +row('Bills (public)',pub.length+' of '+bl.length+' <span style="color:var(--text3);font-weight:400">(home-only excluded)</span>')
+   +row('Periods',ps.length?(ps[0]+' to '+ps[ps.length-1]):'-')
+   +row('Latest period',ps.length?ps[ps.length-1]:'-')
+   +row('Meters',(P.meters||[]).length)
+   +row('With photo',ph+' / '+pub.length)
+   +'</table>'
+   +'<div style="margin-top:12px;padding:8px 10px;background:var(--bg2);border-radius:8px;font-size:12px"><i class="fa-solid fa-code-branch"></i> Next: '+(ok?'':'copy the file into VillageManPublic, then ')+'commit + push in GitHub Desktop</div>'
+   +'<div style="text-align:right;margin-top:12px"><button class="btn" onclick="this.closest(\'div[style*=fixed]\').remove()">OK</button></div>'
+   +'</div></div>';
+  var w=document.createElement('div'); w.innerHTML=h; document.body.appendChild(w.firstChild);
+}
 async function exportPublicData(){
   var D=await window.CM_REPO.all();
   var meters=(D.meters||[]).map(function(m){
@@ -329,15 +381,18 @@ async function exportPublicData(){
   });
   var payload={ generated_at:new Date().toISOString(), estate_name:(D.meta&&D.meta.estate_name)||'', meters:meters, utility_bills:bills };
   var js='window.VILLAGEMAN_DATA = '+JSON.stringify(payload, null, 1)+';\n';
+  var _saved=await _vmpWrite(js);
+  _vmpPopup(_saved, js, payload);
+  if(_saved) return;
   var blob=new Blob([js], {type:'application/javascript'});
   var url=URL.createObjectURL(blob);
   var a=document.createElement('a'); a.href=url; a.download='villageman_data.js'; a.click();
   URL.revokeObjectURL(url);
-  U.toast('Exported villageman_data.js - push it to the VillageManPublic repo');
 }
 window.renderPubReport=renderPubReport;
 window.setPubYear=setPubYear;
 window.setPubSort=setPubSort;
 window.exportPublicData=exportPublicData;
+window.pubSetupFolder=pubSetupFolder;
 window.pubToggle=pubToggle;
 })();

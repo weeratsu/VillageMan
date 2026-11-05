@@ -175,7 +175,7 @@ function _centralTrendSvg(map, months){
 function _centralTrendCard(bills){
   var map=_centralByMonth(bills); var months=_lastMonths(12);
   var hasData=Object.keys(map).length>0;
-  var title='\u0e04\u0e48\u0e32\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07\u0e23\u0e32\u0e22\u0e40\u0e14\u0e37\u0e2d\u0e19 (Common-area Trend)';
+  var title='\u0e04\u0e48\u0e32\u0e44\u0e1f\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07\u0e23\u0e32\u0e22\u0e40\u0e14\u0e37\u0e2d\u0e19 (Common-area Trend)';
   if(!hasData){ return '<div class="card"><h2><i class="fa-solid fa-users"></i> '+title+'</h2><p class="text-muted" style="padding:8px">\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25</p></div>'; }
   var cur=D_UTIL.curPeriod(); var thisMo=map[cur]||0;
   var yr=cur.slice(0,4); var ytd=0; Object.keys(map).forEach(function(k){ if(k.slice(0,4)===yr) ytd+=map[k]; });
