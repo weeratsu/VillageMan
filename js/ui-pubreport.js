@@ -83,7 +83,7 @@ function _calcSteps(b){
   h+=S(2,'= \u0e23\u0e32\u0e04\u0e32\u0e15\u0e48\u0e2d\u0e2b\u0e19\u0e48\u0e27\u0e22', (ratePerUnit!=null?U.fmtMoney(ratePerUnit):dash));
   var ftRate=(cf!=null && cu>0)?(cf/cu):null;
   var preVat=((ce!=null?ce:0)+(cf!=null?cf:0));
-  h+=S(3,'\u00d7 \u0e2b\u0e19\u0e48\u0e27\u0e22\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07 ('+U.fmtNum(cu)+' \u0e2b\u0e19\u0e48\u0e27\u0e22)', (ce!=null?('<span class="text-muted" style="font-size:10px">('+(ratePerUnit!=null?U.fmtMoney(ratePerUnit):dash)+' \u00d7 '+U.fmtNum(cu)+') = </span>'+U.fmtMoney(ce)):dash));
+  h+=S(3,'\u00d7 \u0e2b\u0e19\u0e48\u0e27\u0e22\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07 ('+U.fmtNum(cu)+' \u0e2b\u0e19\u0e48\u0e27\u0e22)'+((b._days>0&&cu>0)?' <span style="font-size:10px;color:var(--text3)">&middot; '+b._days+' \u0e27\u0e31\u0e19 &middot; \u0e40\u0e09\u0e25\u0e35\u0e48\u0e22 '+(cu/b._days).toFixed(1)+' \u0e2b\u0e19\u0e48\u0e27\u0e22/\u0e27\u0e31\u0e19</span>':''), (ce!=null?('<span class="text-muted" style="font-size:10px">('+(ratePerUnit!=null?U.fmtMoney(ratePerUnit):dash)+' \u00d7 '+U.fmtNum(cu)+') = </span>'+U.fmtMoney(ce)):dash));
   h+=S(4,'+ Ft (\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07)', (cf!=null?('<span class="text-muted" style="font-size:10px">('+(ftRate!=null?U.fmtRate(ftRate):dash)+' \u00d7 '+U.fmtNum(cu)+') = </span>'+U.fmtMoney(cf)):dash));
   h+=S(5,'+ VAT 7%', (cv!=null?('<span class="text-muted" style="font-size:10px">('+U.fmtMoney(preVat)+' \u00d7 7%) = </span>'+U.fmtMoney(cv)):dash));
   h+=S(6,'<b>= \u0e22\u0e2d\u0e14\u0e04\u0e48\u0e32\u0e44\u0e1f\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07\u0e17\u0e35\u0e48\u0e15\u0e49\u0e2d\u0e07\u0e40\u0e01\u0e47\u0e1a</b>', '<b>'+U.fmtMoney(ca)+'</b>');
@@ -91,6 +91,47 @@ function _calcSteps(b){
   return h;
 }
 
+function _pubCAmt(b){ return b.split_meter?(Number(b.central_amount)||0):(Number(b.total_amount)||0); }
+function _pubReimbBadge(b){
+  if(!b.paid) return '';
+  if(b.reimbursed) return '<div style="margin-top:3px"><span class="badge" style="font-size:9px;background:#dcfce7;color:#166534">\u0e40\u0e1a\u0e34\u0e01\u0e41\u0e25\u0e49\u0e27</span>'+(b.reimbursed_date?'<div style="font-size:8px;color:var(--text3)">'+U.fmtDate(b.reimbursed_date)+'</div>':'')+'</div>';
+  return '<div style="margin-top:3px"><span class="badge" style="font-size:9px;background:#ffedd5;color:#9a3412">\u0e04\u0e49\u0e32\u0e07\u0e40\u0e1a\u0e34\u0e01</span></div>';
+}
+async function pubReimbOpen(){
+  var D=await window.CM_REPO.all(), all=(D.utility_bills||[]).filter(function(b){ return !b.home_only && b.paid && _pubCAmt(b)>0; });
+  var pend=all.filter(function(b){return !b.reimbursed;}).sort(function(a,b){return a.period<b.period?-1:1;});
+  var rounds={}; all.filter(function(b){return b.reimbursed;}).forEach(function(b){ var k=b.reimb_id||('R'+(b.reimbursed_date||'')); (rounds[k]=rounds[k]||{id:k,date:b.reimbursed_date,note:b.reimb_note||'',bills:[]}).bills.push(b); });
+  var rl=Object.keys(rounds).map(function(k){return rounds[k];}).sort(function(a,b){return (b.date||'')<(a.date||'')?-1:1;});
+  var today=new Date(), iso=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+  var h='<div id="pub-reimb-ov" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)this.remove()">'
+   +'<div style="background:var(--bg,#fff);border-radius:12px;padding:18px 22px;width:480px;max-width:94vw;max-height:88vh;overflow:auto;box-shadow:0 10px 30px rgba(0,0,0,.25);font-size:12px">'
+   +'<div style="font-weight:700;font-size:15px;margin-bottom:10px"><i class="fa-solid fa-hand-holding-dollar"></i> \u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e01\u0e32\u0e23\u0e40\u0e1a\u0e34\u0e01\u0e40\u0e07\u0e34\u0e19\u0e04\u0e48\u0e32\u0e44\u0e1f\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07</div>'
+   +'<div style="color:var(--text3);margin-bottom:6px">\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e07\u0e27\u0e14\u0e17\u0e35\u0e48\u0e08\u0e48\u0e32\u0e22\u0e41\u0e25\u0e49\u0e27\u0e41\u0e15\u0e48\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e40\u0e1a\u0e34\u0e01</div>';
+  if(!pend.length) h+='<div style="padding:8px;color:var(--text3)">\u0e44\u0e21\u0e48\u0e21\u0e35\u0e07\u0e27\u0e14\u0e04\u0e49\u0e32\u0e07\u0e40\u0e1a\u0e34\u0e01</div>';
+  else h+='<table style="width:100%;border-collapse:collapse">'+pend.map(function(b){ return '<tr><td style="padding:3px 0"><label style="cursor:pointer"><input type="checkbox" class="pub-rb" checked value="'+b.id+'" data-amt="'+_pubCAmt(b)+'" onchange="pubReimbSum()"> '+U.esc(b.period)+'</label></td><td style="text-align:right">'+U.fmtMoney(_pubCAmt(b))+'</td><td style="text-align:right;color:var(--text3);font-size:10px">'+(b.paid_date?U.fmtDate(b.paid_date):'')+'</td></tr>'; }).join('')+'</table>'
+   +'<div style="display:flex;justify-content:space-between;margin:8px 0;font-weight:700"><span>\u0e23\u0e27\u0e21\u0e40\u0e1a\u0e34\u0e01</span><span id="pub-rb-sum"></span></div>'
+   +'<div style="display:grid;grid-template-columns:110px 1fr;gap:6px;align-items:center"><span>\u0e27\u0e31\u0e19\u0e17\u0e35\u0e48\u0e40\u0e1a\u0e34\u0e01</span><input type="date" id="pub-rb-date" class="inp" value="'+iso+'"><span>\u0e2b\u0e21\u0e32\u0e22\u0e40\u0e2b\u0e15\u0e38 / \u0e40\u0e25\u0e02\u0e43\u0e1a\u0e40\u0e1a\u0e34\u0e01</span><input id="pub-rb-note" class="inp"></div>'
+   +'<div style="text-align:right;margin-top:10px"><button class="btn" onclick="pubReimbSave()"><i class="fa-solid fa-floppy-disk"></i> \u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e01\u0e32\u0e23\u0e40\u0e1a\u0e34\u0e01</button></div>';
+  if(rl.length){ h+='<div style="font-weight:700;margin:14px 0 6px;border-top:1px solid var(--border);padding-top:10px">\u0e1b\u0e23\u0e30\u0e27\u0e31\u0e15\u0e34\u0e01\u0e32\u0e23\u0e40\u0e1a\u0e34\u0e01</div>'
+   +rl.map(function(r){ var s=r.bills.reduce(function(x,b){return x+_pubCAmt(b);},0); return '<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px dashed var(--border)"><div><b>'+(r.date?U.fmtDate(r.date):'-')+'</b> '+U.fmtMoney(s)+'<div style="font-size:10px;color:var(--text3)">'+r.bills.map(function(b){return b.period;}).sort().join(', ')+(r.note?' &middot; '+U.esc(r.note):'')+'</div></div><button class="btn btn-ghost" style="font-size:10px;padding:2px 8px" onclick="pubReimbUndo(\''+U.esc(r.id)+'\')">\u0e22\u0e01\u0e40\u0e25\u0e34\u0e01</button></div>'; }).join(''); }
+  h+='</div></div>';
+  var w=document.createElement('div'); w.innerHTML=h; document.body.appendChild(w.firstChild); pubReimbSum();
+}
+function pubReimbSum(){ var s=0,n=0; document.querySelectorAll('.pub-rb').forEach(function(x){ if(x.checked){ s+=Number(x.getAttribute('data-amt'))||0; n++; } }); var el=document.getElementById('pub-rb-sum'); if(el) el.textContent=U.fmtMoney(s)+' ('+n+' \u0e07\u0e27\u0e14)'; }
+async function pubReimbSave(){
+  var ids=[]; document.querySelectorAll('.pub-rb').forEach(function(x){ if(x.checked) ids.push(x.value); });
+  var d=(document.getElementById('pub-rb-date')||{}).value||'', note=(document.getElementById('pub-rb-note')||{}).value||'';
+  if(!ids.length||!d){ U.toast('Select periods and a date'); return; }
+  var rid='R'+d.replace(/-/g,'')+'-'+Date.now().toString(36);
+  for(var i=0;i<ids.length;i++) await window.CM_REPO.update('utility_bills', ids[i], {reimbursed:true, reimbursed_date:d, reimb_id:rid, reimb_note:note});
+  var ov=document.getElementById('pub-reimb-ov'); if(ov) ov.remove(); U.toast('Saved: '+ids.length+' \u0e07\u0e27\u0e14'); renderPubReport();
+}
+async function pubReimbUndo(rid){
+  if(!confirm('\u0e22\u0e01\u0e40\u0e25\u0e34\u0e01\u0e23\u0e2d\u0e1a\u0e40\u0e1a\u0e34\u0e01\u0e19\u0e35\u0e49?')) return;
+  var D=await window.CM_REPO.all(), bs=(D.utility_bills||[]).filter(function(b){ return b.reimbursed && (b.reimb_id||('R'+(b.reimbursed_date||'')))===rid; });
+  for(var i=0;i<bs.length;i++) await window.CM_REPO.update('utility_bills', bs[i].id, {reimbursed:false, reimbursed_date:'', reimb_id:'', reimb_note:''});
+  var ov=document.getElementById('pub-reimb-ov'); if(ov) ov.remove(); renderPubReport(); pubReimbOpen();
+}
 async function renderPubReport(){ setTimeout(_vmpLabel,0);
   var el=document.getElementById('tab-pubreport'); if(!el) return;
   var D=await window.CM_REPO.all();
@@ -98,6 +139,7 @@ async function renderPubReport(){ setTimeout(_vmpLabel,0);
   var _meterById={}; (D.meters||[]).forEach(function(m){ _meterById[m.id]=m; });
   var _photoBase=(D.meta&&D.meta.meter_photo_base)?D.meta.meter_photo_base:'meter-photos';
   function _meterNo(b){ if(b && b.central_meter_no) return b.central_meter_no; var m=_meterById[b.meter_id]; if(!m) return '-'; return m.installation||m.meter_no||m.ca_no||'-'; }
+  function _vmDays(b){ if(!b.central_date||!b.period) return 0; var a=b.period.split('-'), y=+a[0], m=+a[1]-1; if(m<1){m=12;y--;} var pp=y+'-'+(m<10?'0':'')+m; var pb=(D.utility_bills||[]).filter(function(x){return x.meter_id===b.meter_id&&x.period===pp&&x.central_date;})[0]; var s=pb?pb.central_date:''; if(!s){ var idx=window.VM_PHOTO_INDEX||{}, e=idx['electricity/'+pp.split('-')[0]+'/'+_meterNo(b)+'_'+pp], mm=e&&e.file&&String(e.file).match(/_(\d{4}-\d{2}-\d{2})\.[a-z]+$/i); if(mm) s=mm[1]; } if(!s) return 0; var d=Math.round((new Date(b.central_date)-new Date(s))/864e5); return d>0?d:0; }
   // year options from all bills
   var ys={}; (D.utility_bills||[]).forEach(function(b){ var y=(b.period||'').split('-')[0]; if(y) ys[y]=1; }); ys[String(_pubYear)]=1; ys[String(new Date().getFullYear())]=1;
   var yearList=Object.keys(ys).sort(function(a,b){return b-a;});
@@ -160,7 +202,7 @@ async function renderPubReport(){ setTimeout(_vmpLabel,0);
       +'<td class="r">'+(energy!=null?U.fmtMoney(energy):dash)+'</td>'
       +'<td class="r">'+(vat!=null?U.fmtMoney(vat):dash)+'</td>'
       +'<td class="r"><b>'+U.fmtMoney(central)+'</b></td>'
-      +'<td class="r">'+(b.paid?'<span class="tag tag-active" style="font-size:9px">\u0e08\u0e48\u0e32\u0e22\u0e41\u0e25\u0e49\u0e27</span>':'<span class="tag tag-planned" style="font-size:9px">\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e08\u0e48\u0e32\u0e22</span>')+(b.paid&&b.paid_date?('<div style="font-size:8px;color:var(--text3);margin-top:2px">'+U.fmtDate(b.paid_date)+'</div>'):'')+'</td>'
+      +'<td class="r">'+(b.paid?'<span class="tag tag-active" style="font-size:9px">\u0e08\u0e48\u0e32\u0e22\u0e41\u0e25\u0e49\u0e27</span>':'<span class="tag tag-planned" style="font-size:9px">\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e08\u0e48\u0e32\u0e22</span>')+(b.paid&&b.paid_date?('<div style="font-size:8px;color:var(--text3);margin-top:2px">'+U.fmtDate(b.paid_date)+'</div>'):'')+_pubReimbBadge(b)+'</td>'
       +'<td class="r">'+(function(){
         var src=b.meter_photo_path||_guessPhotoPath(b);
         if(!src) return dash;
@@ -172,7 +214,7 @@ async function renderPubReport(){ setTimeout(_vmpLabel,0);
     if(isSplit){
       r+='<tr class="pub-detail" id="pd-'+b.id+'" style="display:none;background:var(--bg2)"><td colspan="11" style="padding:10px 14px;font-size:11px;line-height:1.6">'
         +'<div style="font-weight:700;margin-bottom:4px"><i class="fa-solid fa-calculator"></i> \u0e27\u0e34\u0e18\u0e35\u0e04\u0e34\u0e14\u0e22\u0e2d\u0e14\u0e04\u0e48\u0e32\u0e44\u0e1f\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07 ('+U.esc(b.period||'')+')</div>'
-        +'<div style="max-width:460px">'+_calcSteps(b)+'</div>'
+        +'<div style="max-width:460px">'+_calcSteps((b._days=_vmDays(b),b))+'</div>'
         +'<div style="margin-top:6px;font-size:10px;color:var(--text3)">\u0e2b\u0e19\u0e48\u0e27\u0e22\u0e21\u0e34\u0e40\u0e15\u0e2d\u0e23\u0e4c\u0e23\u0e27\u0e21\u0e17\u0e31\u0e49\u0e07\u0e1a\u0e34\u0e25 '+U.fmtNum(Number(b.units_used)||0)+' \u2014 \u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07 '+U.fmtNum(Number(b.central_units)||0)+' / \u0e1a\u0e49\u0e32\u0e19 '+U.fmtNum(Number(b.home_units)||0)+'</div>'
         +(b.invoice_path?('<div style="margin-top:3px"><a href="#" onclick="pubViewMedia(this.getAttribute(\'data-src\'),event);return false;" data-src="'+U.esc(b.invoice_path)+'"><i class="fa-solid fa-file-invoice"></i> \u0e43\u0e1a\u0e41\u0e08\u0e49\u0e07\u0e2b\u0e19\u0e35\u0e49 (Invoice)</a></div>'):'')+(b.receipt_path?('<div style="margin-top:3px"><a href="#" onclick="pubViewMedia(this.getAttribute(\'data-src\'),event);return false;" data-src="'+U.esc(b.receipt_path)+'"><i class="fa-solid fa-receipt"></i> \u0e43\u0e1a\u0e40\u0e2a\u0e23\u0e47\u0e08 (Receipt)</a></div>'):'')+'</td></tr>';
     }
@@ -188,12 +230,12 @@ async function renderPubReport(){ setTimeout(_vmpLabel,0);
   el.innerHTML = '<div class="card">'
     +'<h2><i class="fa-solid fa-users"></i> \u0e2a\u0e23\u0e38\u0e1b\u0e04\u0e48\u0e32\u0e44\u0e1f\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07 (\u0e2a\u0e33\u0e2b\u0e23\u0e31\u0e1a\u0e25\u0e39\u0e01\u0e1a\u0e49\u0e32\u0e19)</h2>'
     +'<p class="text-muted" style="font-size:12px;margin:-4px 0 10px">\u0e2b\u0e19\u0e49\u0e32\u0e19\u0e35\u0e49\u0e41\u0e2a\u0e14\u0e07\u0e04\u0e48\u0e32\u0e44\u0e1f\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07\u0e02\u0e2d\u0e07\u0e2b\u0e21\u0e39\u0e48\u0e1a\u0e49\u0e32\u0e19 \u0e27\u0e48\u0e32\u0e41\u0e15\u0e48\u0e25\u0e30\u0e07\u0e27\u0e14\u0e04\u0e34\u0e14\u0e2d\u0e22\u0e48\u0e32\u0e07\u0e44\u0e23 \u0e23\u0e27\u0e21\u0e40\u0e17\u0e48\u0e32\u0e44\u0e23</p>'
-    +'<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><label class="text-muted" style="font-size:12px">\u0e1b\u0e35:</label><select class="inp" style="max-width:120px" onchange="setPubYear(this.value)">'+yearOpts+'</select>'+'<button class="btn btn-ghost" style="margin-left:8px;font-size:11px;padding:4px 10px" onclick="exportPublicData()" title="Export bills+meters as villageman_data.js for the public GitHub Pages site"><i class="fa-solid fa-cloud-arrow-up"></i> Export for web</button>'+'<button class="btn btn-ghost" style="margin-left:4px;font-size:11px;padding:4px 10px" onclick="pubSetupFolder()" title="Choose the VillageManPublic folder once"><i class="fa-solid fa-folder-open"></i> <span id="pub-fold-lbl">Set VMP folder</span></button></div>'+'<div class="card" style="background:var(--bg2);margin-bottom:12px">'+'<h3 style="font-size:12px;margin:0 0 6px"><i class="fa-solid fa-chart-column"></i> \u0e04\u0e48\u0e32\u0e44\u0e1f\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07\u0e23\u0e32\u0e22\u0e40\u0e14\u0e37\u0e2d\u0e19 ('+_pubYear+')</h3>'+_pubMonthlyCostChart(bills)+'</div>'
+    +'<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><label class="text-muted" style="font-size:12px">\u0e1b\u0e35:</label><select class="inp" style="max-width:120px" onchange="setPubYear(this.value)">'+yearOpts+'</select>'+'<button class="btn btn-ghost" style="margin-left:8px;font-size:11px;padding:4px 10px" onclick="exportPublicData()" title="Export bills+meters as villageman_data.js for the public GitHub Pages site"><i class="fa-solid fa-cloud-arrow-up"></i> Export for web</button>'+'<button class="btn btn-ghost" style="margin-left:4px;font-size:11px;padding:4px 10px" onclick="pubReimbOpen()"><i class="fa-solid fa-hand-holding-dollar"></i> \u0e40\u0e1a\u0e34\u0e01\u0e40\u0e07\u0e34\u0e19</button>'+'<button class="btn btn-ghost" style="margin-left:4px;font-size:11px;padding:4px 10px" onclick="pubSetupFolder()" title="Choose the VillageManPublic folder once"><i class="fa-solid fa-folder-open"></i> <span id="pub-fold-lbl">Set VMP folder</span></button></div>'+'<div class="card" style="background:var(--bg2);margin-bottom:12px">'+'<h3 style="font-size:12px;margin:0 0 6px"><i class="fa-solid fa-chart-column"></i> \u0e04\u0e48\u0e32\u0e44\u0e1f\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07\u0e23\u0e32\u0e22\u0e40\u0e14\u0e37\u0e2d\u0e19 ('+_pubYear+')</h3>'+_pubMonthlyCostChart(bills)+'</div>'
     +'<div class="kpi-grid">'
       +kpi('\u0e23\u0e27\u0e21\u0e04\u0e48\u0e32\u0e44\u0e1f\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07\u0e17\u0e31\u0e49\u0e07\u0e1b\u0e35', U.fmtMoney(totCentral), 'text-error', months+' \u0e07\u0e27\u0e14')
       +kpi('\u0e40\u0e09\u0e25\u0e35\u0e48\u0e22\u0e15\u0e48\u0e2d\u0e40\u0e14\u0e37\u0e2d\u0e19', U.fmtMoney(avg), '', '')
       +kpi('\u0e2b\u0e19\u0e48\u0e27\u0e22\u0e04\u0e48\u0e32\u0e44\u0e1f\u0e2a\u0e48\u0e27\u0e19\u0e01\u0e25\u0e32\u0e07\u0e23\u0e27\u0e21', Math.round(cUnits), '', '')
-      +kpi('\u0e1a\u0e34\u0e25\u0e1e\u0e48\u0e27\u0e07 / \u0e1a\u0e34\u0e25\u0e18\u0e23\u0e23\u0e21\u0e14\u0e32', nSplit+' / '+nFlat, '', '\u0e1a\u0e34\u0e25')
+      +(function(){ var pb=(D.utility_bills||[]).filter(function(b){return !b.home_only&&b.paid&&!b.reimbursed&&_pubCAmt(b)>0;}); var s=pb.reduce(function(x,b){return x+_pubCAmt(b);},0); return kpi('\u0e22\u0e2d\u0e14\u0e04\u0e49\u0e32\u0e07\u0e40\u0e1a\u0e34\u0e01', U.fmtMoney(s), s>0?'text-warning':'', pb.length+' \u0e07\u0e27\u0e14 (all years)'); })()
     +'</div>'
     +tbl
     +'</div>';
@@ -311,10 +353,26 @@ async function pubSetupFolder(){
   if(!window.showDirectoryPicker){ U.toast('Browser does not support folder access - use Chrome/Edge'); return; }
   try{ var h=await window.showDirectoryPicker({id:'vmp', mode:'readwrite'}); await _vmpPut(h); _vmpLabel(); U.toast('VMP folder set: '+h.name); }catch(e){}
 }
+function _vmpAsk(h){ return new Promise(function(res){
+  var ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML='<div style="background:var(--bg,#fff);border-radius:12px;padding:18px 22px;width:400px;max-width:94vw;box-shadow:0 10px 30px rgba(0,0,0,.25);font-size:13px">'
+   +'<div style="font-weight:700;font-size:15px;margin-bottom:8px"><i class="fa-solid fa-folder-open" style="color:var(--primary,#3b82f6)"></i> \u0e02\u0e2d\u0e2a\u0e34\u0e17\u0e18\u0e34\u0e4c\u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e44\u0e1f\u0e25\u0e4c</div>'
+   +'<div>\u0e40\u0e1e\u0e37\u0e48\u0e2d\u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01 villageman_data.js \u0e25\u0e07\u0e42\u0e1f\u0e25\u0e40\u0e14\u0e2d\u0e23\u0e4c <b>'+U.esc(h.name)+'</b></div>'
+   +'<div style="margin-top:8px;padding:8px 10px;background:var(--bg2);border-radius:8px;font-size:11px;color:var(--text3)">\u0e01\u0e14 \u0e2d\u0e19\u0e38\u0e0d\u0e32\u0e15 \u0e41\u0e25\u0e49\u0e27 Chrome \u0e08\u0e30\u0e16\u0e32\u0e21\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e2d\u0e35\u0e01\u0e04\u0e23\u0e31\u0e49\u0e07 \u0e43\u0e2b\u0e49\u0e01\u0e14 Allow</div>'
+   +'<div style="display:flex;justify-content:space-between;margin-top:14px"><button class="btn btn-ghost" data-k="0">\u0e22\u0e01\u0e40\u0e25\u0e34\u0e01</button><button class="btn" data-k="1"><i class="fa-solid fa-check"></i> \u0e2d\u0e19\u0e38\u0e0d\u0e32\u0e15</button></div></div>';
+  var done=function(v){ document.removeEventListener('keydown',kd); ov.remove(); res(v); };
+  var kd=function(e){ if(e.key==='Escape') done(false); };
+  document.addEventListener('keydown',kd);
+  ov.addEventListener('click',function(e){ var b=e.target.closest('button[data-k]');
+    if(b){ if(b.getAttribute('data-k')==='1'){ h.requestPermission({mode:'readwrite'}).then(function(p){ done(p==='granted'); }).catch(function(){ done(false); }); } else done(false); return; }
+    if(e.target===ov) done(false); });
+  document.body.appendChild(ov);
+}); }
 async function _vmpWrite(js){
   var h=await _vmpGet(); if(!h) return false;
   try{
-    var p=await h.queryPermission({mode:'readwrite'}); if(p!=='granted') p=await h.requestPermission({mode:'readwrite'}); if(p!=='granted') return false;
+    var p=await h.queryPermission({mode:'readwrite'}); if(p!=='granted'){ var ok=await _vmpAsk(h); if(!ok) return false; p=await h.queryPermission({mode:'readwrite'}); } if(p!=='granted') return false;
     var fh=await h.getFileHandle('villageman_data.js',{create:true}); var w=await fh.createWritable(); await w.write(js); await w.close(); return h.name;
   }catch(e){ console.error(e); return false; }
 }
@@ -370,7 +428,7 @@ async function exportPublicData(){
       id:b.id, meter_id:b.meter_id, period:b.period||'', utility_type:b.utility_type||'',
       units_used:b.units_used||0, prev_reading:b.prev_reading||0, present_reading:b.present_reading||0,
       energy_charge:b.energy_charge||0, vat:b.vat||0, total_amount:b.total_amount||0,
-      paid:!!b.paid, paid_date:b.paid_date||'', due_date:b.due_date||'',
+      paid:!!b.paid, paid_date:b.paid_date||'', due_date:b.due_date||'', reimbursed:!!b.reimbursed, reimbursed_date:b.reimbursed_date||'',
       split_meter:!!b.split_meter, home_only:!!b.home_only,
       bill_total:b.bill_total||0, central_meter_no:b.central_meter_no||'',
       central_prev:b.central_prev||0, central_present:b.central_present||0, central_units:b.central_units||0,
@@ -395,4 +453,5 @@ window.setPubSort=setPubSort;
 window.exportPublicData=exportPublicData;
 window.pubSetupFolder=pubSetupFolder;
 window.pubToggle=pubToggle;
+window.pubReimbOpen=pubReimbOpen; window.pubReimbSum=pubReimbSum; window.pubReimbSave=pubReimbSave; window.pubReimbUndo=pubReimbUndo;
 })();
