@@ -82,10 +82,27 @@
     // records added elsewhere. Now every push re-reads the Sheet and merges per record id:
     // local wins only for records this device changed/deleted since its last sync (BASE).
     var BASE_KEY = SKEY + '_base';
-    function _readBase(){ try{ var r=localStorage.getItem(BASE_KEY); return r?JSON.parse(r):null; }catch(e){ return null; } }
-    function _writeBase(d){ try{ localStorage.setItem(BASE_KEY, JSON.stringify(d)); }catch(e){} }
+    var _memBase=null, _deleted={};
+    function _readBase(){ return _memBase ? JSON.parse(_memBase) : null; }
+    function _writeBase(d){ _memBase=JSON.stringify(d); }
+    var BK_KEY = SKEY + '_backups';
+    function _backup(d,why){ try{ var a=JSON.parse(localStorage.getItem(BK_KEY)||'[]'); a.unshift({at:new Date().toISOString(),why:why,data:d}); while(a.length>10) a.pop();
+      for(;;){ try{ localStorage.setItem(BK_KEY, JSON.stringify(a)); break; }catch(e){ if(a.length<=1) break; a.pop(); } } }catch(e){} }
+    window.vmListBackups=function(){ try{ return JSON.parse(localStorage.getItem(BK_KEY)||'[]').map(function(b,i){ return {i:i,at:b.at,why:b.why,bills:((b.data||{}).utility_bills||[]).length}; }); }catch(e){ return []; } };
+    window.vmGetBackup=function(i){ try{ return JSON.parse(localStorage.getItem(BK_KEY)||'[]')[i].data; }catch(e){ return null; } };
+    /* Guard: refuse a push that drops records or zeroes bill amounts the Sheet already has (unless deleted on purpose here). */
+    function _guard(remote, merged){
+      var issues=[];
+      Object.keys(remote||{}).forEach(function(k){ if(!Array.isArray(remote[k])) return;
+        var mm={}; (merged[k]||[]).forEach(function(x){ if(x&&x.id) mm[x.id]=x; });
+        remote[k].forEach(function(x){ if(!x||!x.id) return; var m=mm[x.id];
+          if(!m){ if(!_deleted[x.id]) issues.push(k+' '+(x.period||x.name||x.id)+' would be removed'); return; }
+          if(k==='utility_bills'){ ['total_amount','bill_total','central_amount','units_used'].forEach(function(f){ if(Number(x[f])>0 && !(Number(m[f])>0)) issues.push((x.period||x.id)+' '+f+' '+x[f]+' -> 0'); }); }
+        }); });
+      return issues;
+    }
     function _merge3(base, local, remote){
-      if(!base) return local;
+      base = base || remote;
       var out={}, keys={};
       [base,local,remote].forEach(function(o){ Object.keys(o||{}).forEach(function(k){ keys[k]=1; }); });
       Object.keys(keys).forEach(function(k){
@@ -99,7 +116,7 @@
             if(!x||!x.id){ res.push(x); return; }
             seen[x.id]=1;
             var lx=lm[x.id];
-            if(!lx){ if(bm[x.id]) return; res.push(x); return; }
+            if(!lx){ if(_deleted[x.id]) return; res.push(x); return; }
             res.push(JSON.stringify(lx)!==bm[x.id] ? lx : x);
           });
           l.forEach(function(x){ if(x&&x.id&&!seen[x.id]&&!bm[x.id]) res.push(x); });
@@ -221,6 +238,11 @@
         if(!rr || !rr.ok) throw new Error((rr && rr.error) || 'load before save failed');
         var remote = migrate(_fixDates(rr.data || {}));
         var merged = _isReal(remote) ? migrate(_merge3(_readBase(), JSON.parse(snapshot), remote)) : JSON.parse(snapshot);
+        if(_isReal(remote)){ var iss=_guard(remote, merged);
+          if(iss.length){ console.warn('VillageMan: push BLOCKED', iss); _status('\u26d4 save blocked: would remove/zero '+iss.length+' item(s) - see console','var(--danger,#c33)');
+            self._d = migrate(_merge3(null, JSON.parse(snapshot), remote)); _writeCache(self._d); _writeBase(remote); _rerender();
+            throw new Error('BLOCKED'); }
+          _backup(remote,'before push'); }
         sent = merged;
         return self._post({ action:'replaceAll', data: merged });
       }).then(function(res){
@@ -230,6 +252,7 @@
         else self._schedulePush(800);
         _status('\u2713 synced', 'var(--success,#2a7)');
       }).catch(function(err){
+        if(String((err&&err.message)||err)==='BLOCKED'){ self._schedulePush(30000); return; }
         console.warn('Sheet push failed (kept locally, will retry):', err);
         if(/bad token/.test(String((err&&err.message)||err))) __badToken('vm_sheet_cfg'); _status('\u26a0 not saved: '+String((err&&err.message)||err).slice(0,80), 'var(--danger,#c33)');
         self._schedulePush(30000);
@@ -258,7 +281,7 @@
       await this._ensure();
       var arr = this._d[coll] || [];
       var i = arr.findIndex(function(x){return x.id===id;});
-      if(i>=0){ arr.splice(i,1); await this._push(); return true; }
+      if(i>=0){ _deleted[id]=1; arr.splice(i,1); await this._push(); return true; }
       return false;
     };
     GoogleSheetRepo.prototype.bumpReceipt = async function(){
